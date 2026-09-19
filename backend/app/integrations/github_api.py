@@ -8,12 +8,19 @@ import httpx
 from typing import List, Dict
 
 
-async def fetch_user_repos(access_token: str) -> List[Dict]:
+def _get_headers(token: str = "") -> dict:
     headers = {
-        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "CodeTok-App",
     }
+    if token and str(token).strip():
+        headers["Authorization"] = f"Bearer {str(token).strip()}"
+    return headers
+
+
+async def fetch_user_repos(access_token: str) -> List[Dict]:
+    headers = _get_headers(access_token)
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://api.github.com/user/repos",
@@ -29,11 +36,7 @@ async def fetch_user_repos(access_token: str) -> List[Dict]:
 
 
 async def fetch_installation_repos(installation_token: str) -> List[Dict]:
-    headers = {
-        "Authorization": f"Bearer {installation_token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(installation_token)
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://api.github.com/installation/repositories",
@@ -48,11 +51,7 @@ async def fetch_installation_repos(installation_token: str) -> List[Dict]:
 async def fetch_repo_prs(
     owner: str, repo: str, token: str, filter_bot: bool = True
 ) -> List[Dict]:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls",
@@ -72,14 +71,52 @@ async def fetch_repo_prs(
     return prs
 
 
+async def fetch_user_prs_by_username(username: str, token: str = "") -> List[Dict]:
+    """Search GitHub for PRs authored by a given user and convert to CodeTok issue cards."""
+    headers = _get_headers(token)
+    results = []
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.get(
+                "https://api.github.com/search/issues",
+                headers=headers,
+                params={
+                    "q": f"is:pr author:{username}",
+                    "sort": "updated",
+                    "order": "desc",
+                    "per_page": 20,
+                },
+            )
+            if response.status_code != 200:
+                return []
+            items = response.json().get("items", [])
+        except Exception:
+            return []
+
+    for item in items[:15]:
+        pr_api_url = item.get("pull_request", {}).get("url")
+        if not pr_api_url:
+            continue
+        try:
+            repo_url = item.get("repository_url", "")
+            parts = repo_url.split("/")
+            owner, repo_name = parts[-2], parts[-1]
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                pr_resp = await client.get(pr_api_url, headers=headers)
+                if pr_resp.status_code != 200:
+                    continue
+                pr_data = pr_resp.json()
+            issue = await convert_pr_to_issue(pr_data, owner, repo_name, token)
+            results.append(issue)
+        except Exception:
+            continue
+    return results
+
+
 async def fetch_repo_issues(
     owner: str, repo: str, token: str, filter_bot: bool = True
 ) -> List[Dict]:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/issues",
@@ -104,11 +141,7 @@ async def fetch_repo_issues(
 async def fetch_pr_files(
     owner: str, repo: str, pr_number: int, token: str
 ) -> List[Dict]:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files",
@@ -121,11 +154,7 @@ async def fetch_pr_files(
 
 async def fetch_pr_details(owner: str, repo: str, pr_number: int, token: str) -> Dict:
     """Fetch complete PR object including mergeable, mergeable_state, additions, deletions, base, head."""
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
@@ -139,11 +168,7 @@ async def fetch_pr_check_runs(owner: str, repo: str, head_sha: str, token: str) 
     """Fetch CI/CD check runs for a commit SHA."""
     if not head_sha:
         return []
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             response = await client.get(
@@ -341,11 +366,7 @@ async def convert_issue_to_codeissue(
 async def create_issue(
     owner: str, repo: str, token: str, title: str, body: str, labels: List[str] = None
 ) -> Dict:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _get_headers(token)
     payload = {"title": title, "body": body}
     if labels:
         payload["labels"] = labels

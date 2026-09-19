@@ -101,34 +101,43 @@ async def fetch_personal_prs(
     cache_key = f"prs_personal_{user_id}"
 
     async def _fetch():
-        repos = await github_api.fetch_user_repos(token)
         all_issues = []
-        for repo in repos[:10]:
-            owner = repo["owner"]["login"]
-            repo_name = repo["name"]
+        user = await db.users.find_one({"user_id": user_id}) or {}
+        username = user.get("github_username") or getattr(settings, "github_username", "") or "iamksr05"
+        effective_token = token or user.get("github_access_token") or getattr(settings, "github_token", "")
+
+        # 1. If we have a token, fetch repos directly
+        if effective_token:
             try:
-                prs = await github_api.fetch_repo_prs(
-                    owner, repo_name, token, filter_bot=False
-                )
-                logger.info("Found %d PRs in %s/%s", len(prs), owner, repo_name)
-                for pr in prs[:5]:
+                repos = await github_api.fetch_user_repos(effective_token)
+                for repo in repos[:10]:
+                    owner = repo["owner"]["login"]
+                    repo_name = repo["name"]
                     try:
-                        issue = await github_api.convert_pr_to_issue(
-                            pr, owner, repo_name, token
+                        prs = await github_api.fetch_repo_prs(
+                            owner, repo_name, effective_token, filter_bot=False
                         )
-                        all_issues.append(issue)
-                    except Exception as exc:
-                        logger.error(
-                            "Failed to convert PR #%s from %s/%s: %s",
-                            pr.get("number"),
-                            owner,
-                            repo_name,
-                            exc,
-                        )
-            except httpx.HTTPStatusError as exc:
-                logger.warning(
-                    "Failed to fetch PRs from %s/%s: %s", owner, repo_name, exc
-                )
+                        for pr in prs[:5]:
+                            try:
+                                issue = await github_api.convert_pr_to_issue(
+                                    pr, owner, repo_name, effective_token
+                                )
+                                all_issues.append(issue)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning("Error fetching repos with token: %s", e)
+
+        # 2. If no PRs found from repos or no token, fetch authored PRs directly by username
+        if not all_issues and username:
+            try:
+                user_prs = await github_api.fetch_user_prs_by_username(username, effective_token)
+                all_issues.extend(user_prs)
+            except Exception as e:
+                logger.warning("Error searching PRs for username %s: %s", username, e)
+
         return all_issues
 
     result = await _cached_or_fetch(
@@ -141,7 +150,12 @@ async def fetch_personal_prs(
 async def fetch_org_prs(db: AsyncIOMotorDatabase, force: bool = False) -> List[dict]:
     installation_id = settings.github_app_installation_id
     if not installation_id:
-        raise ValueError("GITHUB_APP_INSTALLATION_ID not configured")
+        username = getattr(settings, "github_username", "iamksr05")
+        token = getattr(settings, "github_token", "")
+        personal_prs = await github_api.fetch_user_prs_by_username(username, token)
+        if personal_prs:
+            return await _enrich_with_agent_traces(db, personal_prs)
+        return await issue_repo.get_all_issues(db)
 
     async def _fetch():
         token_data = await github_app.get_installation_token(installation_id)

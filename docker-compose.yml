@@ -20,6 +20,11 @@ services:
     environment:
       - PORT=8000
       - PYTHONUNBUFFERED=1
+      - MONGO_URL=${MONGO_URL:-mongodb://mongo:27017/codetok}
+      - DB_NAME=${DB_NAME:-codetok}
+      - SKIP_CLI_INSTALL=true
+    depends_on:
+      - mongo
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -28,14 +33,12 @@ services:
       start_period: 15s
 
   # ----------------------------------------------------------------------------
-  # Optional Local MongoDB (Only started if running: docker compose --profile local-db up)
+  # Local MongoDB
   # ----------------------------------------------------------------------------
   mongo:
     image: mongo:7.0
     container_name: snippet-mongo
     restart: unless-stopped
-    profiles:
-      - local-db
     ports:
       - "27017:27017"
     volumes:

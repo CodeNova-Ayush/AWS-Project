@@ -15,10 +15,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     fernet_secret_key: str = ""
 
-    # GitHub OAuth (personal repo access)
+    # GitHub OAuth & User
+    github_username: str = "iamksr05"
+    github_token: str = ""
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
-    github_redirect_uri: str = "http://localhost:8081/auth-callback"
+    github_redirect_uri: str = "http://localhost:8000/auth-callback"
 
     # GitHub App (org repo access)
     github_app_id: str = ""

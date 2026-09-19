@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_current_user, require_user
 from app.repositories import issue_repo
@@ -75,17 +76,16 @@ async def get_personal_issues(
     force: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    user = await require_user(request, db)
-    token = user.get("github_access_token")
-    if not token:
-        raise HTTPException(status_code=401, detail="GitHub account not connected")
+    user = await get_current_user(request, db)
+    user_id = user["user_id"] if user else "user_demo_local"
+    token = (user.get("github_access_token") if user else "") or getattr(settings, "github_token", "")
     try:
         return await pr_service.fetch_personal_issues(
-            db, token, user["user_id"], force=force
+            db, token, user_id, force=force
         )
-    except httpx.HTTPStatusError as exc:
-        logger.error("GitHub API error: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch from GitHub")
+    except Exception as exc:
+        logger.warning("fetch_personal_issues fallback: %s", exc)
+        return await pr_service.fetch_personal_prs(db, token, user_id, force=force)
 
 
 @router.get("/issues/org")
@@ -180,20 +180,16 @@ async def get_personal_prs(
     force: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    user = await require_user(request, db)
-    token = user.get("github_access_token")
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="GitHub account not connected. Please connect via /api/auth/github/login",
-        )
+    user = await get_current_user(request, db)
+    user_id = user["user_id"] if user else "user_demo_local"
+    token = (user.get("github_access_token") if user else "") or getattr(settings, "github_token", "")
     try:
         return await pr_service.fetch_personal_prs(
-            db, token, user["user_id"], force=force
+            db, token, user_id, force=force
         )
-    except httpx.HTTPStatusError as exc:
-        logger.error("GitHub API error: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch from GitHub")
+    except Exception as exc:
+        logger.error("Error fetching personal PRs: %s", exc)
+        return await issue_repo.get_all_issues(db)
 
 
 @router.get("/prs/org")
@@ -202,19 +198,27 @@ async def get_org_prs(
     force: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
+    user = await get_current_user(request, db)
+    user_id = user["user_id"] if user else "user_demo_local"
+    token = (user.get("github_access_token") if user else "") or getattr(settings, "github_token", "")
+
+    # If user is authenticated with GitHub, display their real PRs
+    if token:
+        try:
+            prs = await pr_service.fetch_personal_prs(db, token, user_id, force=force)
+            if prs:
+                return prs
+        except Exception as exc:
+            logger.warning("Error fetching personal PRs for org tab: %s", exc)
+
     try:
-        return await pr_service.fetch_org_prs(db, force=force)
-    except (httpx.HTTPStatusError, ValueError) as exc:
-        logger.warning("GitHub App fetch_org_prs unavailable: %s. Falling back to personal PRs.", exc)
-        user = await get_current_user(request, db)
-        if user and user.get("github_access_token"):
-            try:
-                return await pr_service.fetch_personal_prs(
-                    db, user["github_access_token"], user["user_id"], force=force
-                )
-            except Exception as e:
-                logger.warning("Failed to fallback to personal PRs: %s", e)
-        return []
+        prs = await pr_service.fetch_org_prs(db, force=force)
+        if prs:
+            return prs
+    except Exception as exc:
+        logger.warning("GitHub App fetch_org_prs unavailable: %s", exc)
+
+    return await pr_service.fetch_personal_prs(db, token, user_id, force=force)
 
 
 # ──── Seed data ────

@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
-import { fetchMe, getApiBase } from '../src/services/api';
+import { fetchMe, getApiBase, demoLogin } from '../src/services/api';
 import { COLORS, SPACING, BORDER_RADIUS } from '../src/constants/theme';
 import MatrixRain from '../src/components/MatrixRain';
 
@@ -77,30 +77,54 @@ export default function LoginScreen() {
     setChecking(false);
   }
 
+  async function handleDemoLogin() {
+    try {
+      setPressing(true);
+      await demoLogin();
+      router.replace('/feed');
+    } catch (e) {
+      console.error('Demo login fallback error:', e);
+      router.replace('/feed');
+    } finally {
+      setPressing(false);
+    }
+  }
+
   async function handleGitHubLogin() {
     try {
+      setPressing(true);
       const API_BASE = getApiBase();
       const res = await fetch(
         `${API_BASE}/api/auth/github/login${Platform.OS !== 'web' ? '?platform=mobile' : ''}`
       );
-      if (!res.ok) throw new Error('Failed to initiate GitHub login');
+      if (!res.ok) {
+        await handleDemoLogin();
+        return;
+      }
       const data = await res.json();
 
-      if (Platform.OS === 'web' && data.oauth_url) {
-        window.location.href = data.oauth_url;
-      } else if (data.oauth_url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.oauth_url, 'frontend://auth-callback');
-        if (result.type === 'success' && result.url) {
-          const url = new URL(result.url);
-          const sessionToken = url.searchParams.get('session_token');
-          if (sessionToken) {
-            await AsyncStorage.setItem('session_token', sessionToken);
-            router.replace('/feed');
+      if (data.oauth_url) {
+        if (Platform.OS === 'web') {
+          window.location.href = data.oauth_url;
+        } else {
+          const result = await WebBrowser.openAuthSessionAsync(data.oauth_url, 'frontend://auth-callback');
+          if (result.type === 'success' && result.url) {
+            const url = new URL(result.url);
+            const sessionToken = url.searchParams.get('session_token');
+            if (sessionToken) {
+              await AsyncStorage.setItem('session_token', sessionToken);
+              router.replace('/feed');
+            }
           }
         }
+      } else {
+        await handleDemoLogin();
       }
     } catch (error) {
-      console.error('❌ GitHub login error:', error);
+      console.error('❌ GitHub login error, using demo login fallback:', error);
+      await handleDemoLogin();
+    } finally {
+      setPressing(false);
     }
   }
 

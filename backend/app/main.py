@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 def ensure_opencode_installed():
     """Check if opencode CLI is available, install it globally if missing."""
+    if os.environ.get("SKIP_CLI_INSTALL", "").lower() in ("1", "true", "yes"):
+        return
     if shutil.which("opencode"):
         return
     logger.info("opencode not found on PATH — installing via npm...")
@@ -71,6 +73,8 @@ def ensure_opencode_auth():
 
 def ensure_claude_code_installed():
     """Check if claude CLI is available, install it globally via npm if missing."""
+    if os.environ.get("SKIP_CLI_INSTALL", "").lower() in ("1", "true", "yes"):
+        return
     if shutil.which("claude"):
         logger.info("claude CLI already available: %s", shutil.which("claude"))
         return
@@ -107,6 +111,8 @@ def ensure_claude_code_auth():
 
 def ensure_kiro_installed():
     """Check if kiro-cli is available; install via curl if missing."""
+    if os.environ.get("SKIP_CLI_INSTALL", "").lower() in ("1", "true", "yes"):
+        return
     if shutil.which("kiro-cli"):
         logger.info("kiro-cli already available: %s", shutil.which("kiro-cli"))
         return
@@ -164,6 +170,15 @@ async def lifespan(app: FastAPI):
     ensure_kiro_installed()
     ensure_kiro_auth()
     await init_db(app)
+    # Auto-seed database if empty
+    try:
+        count = await app.state.db.issues.count_documents({})
+        if count == 0:
+            from app.api.v1.issues import seed_data
+            await seed_data(app.state.db)
+            logger.info("Successfully auto-seeded initial issues")
+    except Exception as e:
+        logger.warning("Auto-seed error: %s", e)
     yield
     app.state.db_client.close()
 

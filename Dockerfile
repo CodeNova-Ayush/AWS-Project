@@ -51,6 +51,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy backend application source
 COPY backend/ ./backend/
+RUN pip install --no-cache-dir -e ./backend/emergentintegrations || true
 
 # Install local package
 RUN pip install --no-cache-dir -e ./backend/emergentintegrations

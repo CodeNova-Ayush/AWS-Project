@@ -120,6 +120,20 @@ export async function exchangeSession(sessionId: string): Promise<User> {
   return user;
 }
 
+export async function demoLogin(): Promise<User> {
+  const res = await fetch(`${API_BASE}/api/auth/demo-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Demo login failed');
+  const user = await res.json();
+  if (user.session_token) {
+    await AsyncStorage.setItem('session_token', user.session_token);
+  }
+  return user;
+}
+
 export async function fetchMe(): Promise<User | null> {
   try {
     const headers = await getAuthHeaders();

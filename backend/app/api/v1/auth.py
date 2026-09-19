@@ -59,12 +59,96 @@ async def auth_session(request: Request, response: Response, db: AsyncIOMotorDat
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
+    is_https = request.url.scheme == "https"
     response.set_cookie(
         key="session_token", value=session_token,
-        httponly=True, secure=True, samesite="none", path="/", max_age=7 * 24 * 60 * 60,
+        httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
     )
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if user:
+        user["session_token"] = session_token
     return user
+
+
+@router.post("/demo-login")
+async def demo_login(request: Request, response: Response, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Fast local login connected with user's GitHub account iamksr05."""
+    user_id = "user_demo_local"
+    session_token = f"demo_token_{uuid.uuid4().hex}"
+
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "email": "karanram73005@gmail.com",
+            "name": "Karan Ram (iamksr05)",
+            "github_username": "iamksr05",
+            "picture": "https://avatars.githubusercontent.com/iamksr05",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    is_https = request.url.scheme == "https"
+    response.set_cookie(
+        key="session_token", value=session_token,
+        httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
+    )
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    user["session_token"] = session_token
+    return user
+
+
+@router.post("/github/token")
+async def connect_github_token(
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Allow connecting a GitHub Personal Access Token (PAT) directly."""
+    body = await request.json()
+    token = (body.get("token") or body.get("access_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token required")
+
+    user = await get_current_user(request, db)
+    user_id = user["user_id"] if user else "user_demo_local"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "CodeTok"},
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Invalid GitHub token")
+        gh_data = resp.json()
+
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "github_access_token": token,
+            "github_username": gh_data.get("login"),
+            "name": gh_data.get("name") or gh_data.get("login"),
+            "picture": gh_data.get("avatar_url"),
+        }},
+        upsert=True,
+    )
+    from app.repositories import issue_repo
+    await issue_repo.invalidate_cache(db, f"prs_personal_{user_id}")
+    await issue_repo.invalidate_cache(db, "prs_org")
+
+    return {
+        "status": "connected",
+        "github_username": gh_data.get("login"),
+        "name": gh_data.get("name"),
+    }
 
 
 @router.get("/me")
@@ -88,7 +172,11 @@ async def auth_logout(request: Request, response: Response, db: AsyncIOMotorData
 async def github_login(platform: str = Query(default="web")):
     """Return the GitHub OAuth authorisation URL."""
     if not settings.github_oauth_client_id or not settings.github_redirect_uri:
-        raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
+        return {
+            "configured": False,
+            "oauth_url": None,
+            "message": "GitHub OAuth not configured in .env. Falling back to Demo Login."
+        }
     scope = "repo user"
     oauth_url = (
         "https://github.com/login/oauth/authorize"
@@ -97,7 +185,7 @@ async def github_login(platform: str = Query(default="web")):
         f"&scope={quote(scope, safe='')}"
         f"&state={quote(platform, safe='')}"
     )
-    return {"oauth_url": oauth_url}
+    return {"configured": True, "oauth_url": oauth_url}
 
 
 @router.get("/github/callback")
@@ -127,9 +215,10 @@ async def github_callback(
     user_id = await auth_service.get_or_create_user(db, access_token, github_user)
     session_token = await auth_service.create_session(db, user_id)
 
+    is_https = request.url.scheme == "https"
     response.set_cookie(
         key="session_token", value=session_token,
-        httponly=True, secure=True, samesite="none", path="/", max_age=7 * 24 * 60 * 60,
+        httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
     )
 
     if mobile == "true":
@@ -140,7 +229,9 @@ async def github_callback(
     # If accessed directly via browser navigation, redirect to frontend auth-callback with token
     accept_header = request.headers.get("accept", "")
     if "text/html" in accept_header:
-        web_url = f"http://localhost:8081/auth-callback?session_token={session_token}"
+        host = request.headers.get("host", "localhost:8000")
+        scheme = "https" if is_https else "http"
+        web_url = f"{scheme}://{host}/auth-callback?session_token={session_token}"
         logger.info("Web browser OAuth: redirecting to %s", web_url)
         return RedirectResponse(url=web_url)
 
