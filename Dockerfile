@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
     ca-certificates \
+    unzip \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
@@ -50,6 +51,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy backend application source
 COPY backend/ ./backend/
+
+# Install local package
+RUN pip install --no-cache-dir -e ./backend/emergentintegrations
 
 # Copy compiled frontend static bundle from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist

@@ -1,4 +1,5 @@
 aiofiles>=23.2.1
+anthropic>=0.40.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
 aiosignal==1.4.0
@@ -19,7 +20,6 @@ distro==1.9.0
 dnspython==2.8.0
 ecdsa==0.19.1
 email-validator==2.3.0
-emergentintegrations==0.1.0
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.24.2
@@ -80,6 +80,7 @@ pyasn1_modules==0.4.2
 pycodestyle==2.14.0
 pycparser==3.0
 pydantic==2.12.5
+pydantic-settings>=2.2.0
 pydantic_core==2.41.5
 pyflakes==3.4.0
 Pygments==2.19.2
