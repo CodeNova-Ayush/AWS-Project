@@ -1,0 +1,45 @@
+services:
+  # ----------------------------------------------------------------------------
+  # SNIPPET Full-Stack Application (FastAPI + Embedded Expo Web UI)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: snippet-app:latest
+    container_name: snippet-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      # Reads secrets from backend/.env or root .env if present
+      - path: backend/.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ----------------------------------------------------------------------------
+  # Optional Local MongoDB (Only started if running: docker compose --profile local-db up)
+  # ----------------------------------------------------------------------------
+  mongo:
+    image: mongo:7.0
+    container_name: snippet-mongo
+    restart: unless-stopped
+    profiles:
+      - local-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - snippet_mongo_data:/data/db
+
+volumes:
+  snippet_mongo_data:
