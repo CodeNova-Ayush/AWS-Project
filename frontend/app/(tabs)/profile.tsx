@@ -5,8 +5,104 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../src/constants/theme';
-import { fetchMe, logout, fetchSavedIssues, saveUserKeys, getUserKeyStatus, deleteUserKeys } from '../../src/services/api';
+import {
+  fetchMe,
+  logout,
+  fetchSavedIssues,
+  getUserKeyStatus,
+  saveProviderKey,
+  setActiveProvider,
+  deleteProviderKey,
+  UserKeysStatus,
+} from '../../src/services/api';
 import { CodeIssue } from '../../src/constants/types';
+
+export const PROVIDER_PRESETS = [
+  {
+    id: 'groq',
+    name: 'Groq',
+    badge: 'Fastest',
+    color: '#F55036',
+    icon: 'zap',
+    defaultModel: 'llama-3.3-70b-versatile',
+    popularModels: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+    placeholder: 'gsk_...',
+    hint: 'Ultra-low latency inference via Groq LPU',
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    badge: 'Code & Reasoning',
+    color: '#FF7000',
+    icon: 'cpu',
+    defaultModel: 'mistral-large-latest',
+    popularModels: ['mistral-large-latest', 'codestral-latest', 'mistral-small-latest'],
+    placeholder: '...',
+    hint: 'Frontier European models including Codestral',
+    defaultBaseUrl: 'https://api.mistral.ai/v1',
+  },
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM',
+    badge: 'Enterprise',
+    color: '#76B900',
+    icon: 'terminal',
+    defaultModel: 'meta/llama-3.1-70b-instruct',
+    popularModels: ['meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'],
+    placeholder: 'nvapi-...',
+    hint: 'Accelerated enterprise models on NVIDIA API Catalog',
+    defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    badge: 'Standard',
+    color: '#10A37F',
+    icon: 'cpu',
+    defaultModel: 'gpt-4o-mini',
+    popularModels: ['gpt-4o-mini', 'gpt-4o', 'o1-mini'],
+    placeholder: 'sk-...',
+    hint: 'GPT-4o, GPT-4o-mini, and o1-mini models',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    badge: 'Claude',
+    color: '#D97706',
+    icon: 'shield',
+    defaultModel: 'claude-3-5-sonnet-20241022',
+    popularModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    placeholder: 'sk-ant-...',
+    hint: 'Claude 3.5 Sonnet & Claude 3.5 Haiku',
+    defaultBaseUrl: '',
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    badge: '100+ Models',
+    color: '#6366F1',
+    icon: 'globe',
+    defaultModel: 'anthropic/claude-3.5-sonnet',
+    popularModels: ['anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-exp:free', 'deepseek/deepseek-chat'],
+    placeholder: 'sk-or-...',
+    hint: 'Unified gateway to 100+ AI models & free tiers',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    badge: 'Self-Hosted',
+    color: '#A855F7',
+    icon: 'server',
+    defaultModel: '',
+    popularModels: [],
+    placeholder: 'API Key or Token...',
+    hint: 'Any OpenAI-compatible API (Ollama, vLLM, LMStudio, LocalAI)',
+    defaultBaseUrl: '',
+  },
+];
 
 const TYPE_CONFIG = {
   bug:         { icon: 'alert-circle' as const, color: COLORS.error,   bg: COLORS.errorBg,                    label: 'Bug Fix' },
@@ -80,11 +176,18 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [savedIssues, setSavedIssues] = useState<CodeIssue[]>([]);
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [showKeys, setShowKeys] = useState(false);
-  const [keyStatus, setKeyStatus] = useState({ has_openai_key: false, has_anthropic_key: false });
+  const [selectedProviderId, setSelectedProviderId] = useState('groq');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [modelInput, setModelInput] = useState('');
+  const [baseUrlInput, setBaseUrlInput] = useState('');
   const [savingKeys, setSavingKeys] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<UserKeysStatus>({
+    providers: {},
+    active_provider: 'groq',
+    active_model: 'llama-3.3-70b-versatile',
+    has_openai_key: false,
+    has_anthropic_key: false,
+  });
 
   useEffect(() => { loadUser(); }, []);
 
@@ -93,41 +196,84 @@ export default function ProfileScreen() {
       const data = await fetchMe();
       if (data) {
         setUser(data);
-        const [savedData, keyData] = await Promise.all([fetchSavedIssues(), getUserKeyStatus()]);
+        const [savedData, status] = await Promise.all([fetchSavedIssues(), getUserKeyStatus()]);
         setSavedIssues(savedData);
-        setKeyStatus(keyData);
+        setKeyStatus(status);
+        const initialProvider = status.active_provider || 'groq';
+        setSelectedProviderId(initialProvider);
+        const preset = PROVIDER_PRESETS.find(p => p.id === initialProvider);
+        setModelInput(status.providers?.[initialProvider]?.model || preset?.defaultModel || '');
+        setBaseUrlInput(status.providers?.[initialProvider]?.base_url || preset?.defaultBaseUrl || '');
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }
 
-  async function handleSaveKeys() {
-    if (!openaiKey && !anthropicKey) {
-      Alert.alert('No keys entered', 'Please enter at least one API key.');
+  function handleSelectProvider(pId: string) {
+    setSelectedProviderId(pId);
+    const conf = keyStatus.providers?.[pId];
+    const preset = PROVIDER_PRESETS.find(p => p.id === pId);
+    setModelInput(conf?.model || preset?.defaultModel || '');
+    setBaseUrlInput(conf?.base_url || preset?.defaultBaseUrl || '');
+    setApiKeyInput('');
+  }
+
+  async function handleSaveProvider() {
+    if (!apiKeyInput.trim()) {
+      Alert.alert('Missing API Key', 'Please enter an API key for ' + (currentPreset?.name || 'this provider'));
       return;
     }
     setSavingKeys(true);
     try {
-      await saveUserKeys(openaiKey, anthropicKey);
-      const status = await getUserKeyStatus();
-      setKeyStatus(status);
-      setOpenaiKey('');
-      setAnthropicKey('');
-      Alert.alert('Saved', 'API keys saved securely.');
-    } catch {
-      Alert.alert('Error', 'Failed to save keys.');
+      await saveProviderKey(
+        selectedProviderId,
+        apiKeyInput.trim(),
+        modelInput.trim(),
+        baseUrlInput.trim(),
+        true,
+      );
+      const updatedStatus = await getUserKeyStatus();
+      setKeyStatus(updatedStatus);
+      setApiKeyInput('');
+      Alert.alert('Saved & Activated', `${currentPreset?.name || selectedProviderId} is now active for AI chat & agents.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to save provider key.');
     } finally {
       setSavingKeys(false);
     }
   }
 
-  async function handleDeleteKeys() {
-    Alert.alert('Remove Keys', 'Delete all stored API keys?', [
+  async function handleSetActive(pId: string) {
+    try {
+      const currentModel = keyStatus.providers?.[pId]?.model || PROVIDER_PRESETS.find(p => p.id === pId)?.defaultModel || '';
+      await setActiveProvider(pId, currentModel);
+      const updatedStatus = await getUserKeyStatus();
+      setKeyStatus(updatedStatus);
+    } catch {
+      Alert.alert('Error', 'Failed to switch active provider.');
+    }
+  }
+
+  async function handleDeleteProvider(pId: string) {
+    const pName = PROVIDER_PRESETS.find(p => p.id === pId)?.name || pId;
+    Alert.alert(`Delete ${pName} Key?`, `Remove stored credentials for ${pName}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await deleteUserKeys();
-        setKeyStatus({ has_openai_key: false, has_anthropic_key: false });
-      }},
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteProviderKey(pId);
+            const updated = await getUserKeyStatus();
+            setKeyStatus(updated);
+            if (pId === selectedProviderId) {
+              setApiKeyInput('');
+            }
+          } catch {
+            Alert.alert('Error', 'Failed to delete key.');
+          }
+        },
+      },
     ]);
   }
 
@@ -135,6 +281,11 @@ export default function ProfileScreen() {
     await logout();
     router.replace('/');
   }
+
+  const currentPreset = PROVIDER_PRESETS.find(p => p.id === selectedProviderId) || PROVIDER_PRESETS[0];
+  const isSelectedConfigured = !!keyStatus.providers?.[selectedProviderId]?.configured;
+  const isSelectedActive = keyStatus.active_provider === selectedProviderId;
+  const activePreset = PROVIDER_PRESETS.find(p => p.id === keyStatus.active_provider) || PROVIDER_PRESETS[0];
 
   if (loading) {
     return (
@@ -160,7 +311,6 @@ export default function ProfileScreen() {
           <View>
             {/* ── Profile Card ── */}
             <View style={styles.profileCard}>
-              {/* lime left-accent bar */}
               <View style={styles.profileAccentBar} />
               <View style={styles.profileInner}>
                 <View style={styles.avatarRing}>
@@ -188,71 +338,179 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* ── API Keys ── */}
+            {/* ── Active AI Engine Banner ── */}
+            <View style={styles.activeEngineCard}>
+              <View style={styles.activeEngineTop}>
+                <View style={styles.activePill}>
+                  <View style={styles.activePillDot} />
+                  <Text style={styles.activePillText}>ACTIVE AI ENGINE</Text>
+                </View>
+                <Text style={styles.activeProviderName}>{activePreset.name}</Text>
+              </View>
+              <Text style={styles.activeModelText}>
+                Model: <Text style={{ color: COLORS.primary, fontFamily: 'monospace' }}>{keyStatus.active_model || activePreset.defaultModel || 'Default'}</Text>
+              </Text>
+              <Text style={styles.activeHintText}>
+                Used automatically for Code Review AI Chat, PR Analysis, and Agent workflows.
+              </Text>
+            </View>
+
+            {/* ── API Keys / Multi-Provider Section ── */}
             <View style={styles.sectionHeader}>
               <View style={[styles.sectionDot, { backgroundColor: COLORS.primary }]} />
-              <Text style={styles.sectionTitle}>API Keys</Text>
+              <Text style={styles.sectionTitle}>AI Providers & API Keys (BYOK)</Text>
             </View>
+
+            {/* Horizontal Provider Selector */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.providerScroll} contentContainerStyle={styles.providerScrollContent}>
+              {PROVIDER_PRESETS.map((p) => {
+                const isConfigured = !!keyStatus.providers?.[p.id]?.configured;
+                const isActive = keyStatus.active_provider === p.id;
+                const isSelected = selectedProviderId === p.id;
+
+                return (
+                  <Pressable
+                    key={p.id}
+                    style={[
+                      styles.providerTab,
+                      isSelected && styles.providerTabSelected,
+                      isActive && styles.providerTabActiveBorder,
+                    ]}
+                    onPress={() => handleSelectProvider(p.id)}
+                  >
+                    <View style={styles.providerTabHeader}>
+                      <Feather name={p.icon as any} size={14} color={isSelected ? COLORS.primary : p.color} />
+                      <Text style={[styles.providerTabText, isSelected && styles.providerTabTextSelected]}>
+                        {p.name}
+                      </Text>
+                      {isConfigured && (
+                        <View style={styles.configuredDot} />
+                      )}
+                    </View>
+                    {isActive && (
+                      <View style={styles.activeMiniBadge}>
+                        <Text style={styles.activeMiniBadgeText}>ACTIVE</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Selected Provider Card */}
             <View style={styles.keysCard}>
-              <View style={styles.keyStatusGrid}>
-                <View style={[styles.keyBadge, keyStatus.has_openai_key && styles.keyBadgeActive]}>
-                  <Feather name="cpu" size={13} color={keyStatus.has_openai_key ? COLORS.primary : COLORS.textTertiary} />
-                  <Text style={[styles.keyBadgeText, keyStatus.has_openai_key && styles.keyBadgeTextActive]}>
-                    OpenAI {keyStatus.has_openai_key ? '✓' : 'not set'}
+              <View style={styles.providerConfigHeader}>
+                <View style={[styles.providerIconRing, { backgroundColor: `${currentPreset.color}20` }]}>
+                  <Feather name={currentPreset.icon as any} size={20} color={currentPreset.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.providerConfigTitle}>{currentPreset.name}</Text>
+                    {isSelectedActive && (
+                      <View style={styles.activeBadgeLarge}>
+                        <Text style={styles.activeBadgeLargeText}>CURRENTLY ACTIVE</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.providerConfigHint}>{currentPreset.hint}</Text>
+                </View>
+
+                {isSelectedConfigured && (
+                  <Pressable style={styles.trashBtn} onPress={() => handleDeleteProvider(selectedProviderId)}>
+                    <Feather name="trash-2" size={16} color={COLORS.error} />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Status Row */}
+              <View style={styles.providerStatusRow}>
+                <View style={styles.statusIndicator}>
+                  <View style={[styles.statusDot, { backgroundColor: isSelectedConfigured ? '#22C55E' : COLORS.textTertiary }]} />
+                  <Text style={styles.statusLabel}>
+                    {isSelectedConfigured ? 'API Key Configured & Ready' : 'No Key Configured'}
                   </Text>
                 </View>
-                <View style={[styles.keyBadge, keyStatus.has_anthropic_key && styles.keyBadgeActiveAnthropic]}>
-                  <Feather name="zap" size={13} color={keyStatus.has_anthropic_key ? COLORS.secondary : COLORS.textTertiary} />
-                  <Text style={[styles.keyBadgeText, keyStatus.has_anthropic_key && styles.keyBadgeTextAnthropic]}>
-                    Anthropic {keyStatus.has_anthropic_key ? '✓' : 'not set'}
-                  </Text>
-                </View>
+                {isSelectedConfigured && !isSelectedActive && (
+                  <Pressable style={styles.activateBtn} onPress={() => handleSetActive(selectedProviderId)}>
+                    <Text style={styles.activateBtnText}>Switch to this Engine</Text>
+                  </Pressable>
+                )}
               </View>
 
               <View style={styles.keysDivider} />
 
-              <Pressable style={styles.toggleRow} onPress={() => setShowKeys(v => !v)}>
-                <Feather name={showKeys ? 'eye-off' : 'edit-2'} size={13} color={COLORS.textSecondary} />
-                <Text style={styles.toggleText}>{showKeys ? 'Hide inputs' : 'Update keys'}</Text>
-                <Feather name={showKeys ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textTertiary} style={{ marginLeft: 'auto' }} />
-              </Pressable>
+              {/* Input Form */}
+              <View style={styles.keyInputsWrapper}>
+                <Text style={styles.inputLabel}>
+                  {currentPreset.name} API Key
+                </Text>
+                <TextInput
+                  style={styles.keyInput}
+                  placeholder={isSelectedConfigured ? '•••••••••••••••••••••••• (Leave blank to keep)' : currentPreset.placeholder}
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={apiKeyInput}
+                  onChangeText={setApiKeyInput}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
 
-              {showKeys && (
-                <View style={styles.keyInputsWrapper}>
-                  <Text style={styles.inputLabel}>OpenAI API Key</Text>
-                  <TextInput
-                    style={styles.keyInput}
-                    placeholder="sk-..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={openaiKey}
-                    onChangeText={setOpenaiKey}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
-                  <Text style={styles.inputLabel}>Anthropic API Key</Text>
-                  <TextInput
-                    style={styles.keyInput}
-                    placeholder="sk-ant-..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={anthropicKey}
-                    onChangeText={setAnthropicKey}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
-                  <View style={styles.keyActions}>
-                    <Pressable style={styles.saveKeyBtn} onPress={handleSaveKeys} disabled={savingKeys}>
-                      {savingKeys
-                        ? <ActivityIndicator size="small" color="#000" />
-                        : <Text style={styles.saveKeyBtnText}>Save Keys</Text>}
-                    </Pressable>
-                    {(keyStatus.has_openai_key || keyStatus.has_anthropic_key) && (
-                      <Pressable style={styles.deleteKeyBtn} onPress={handleDeleteKeys}>
-                        <Feather name="trash-2" size={16} color={COLORS.error} />
+                {/* Model Selection */}
+                <Text style={styles.inputLabel}>Model Name</Text>
+                {currentPreset.popularModels.length > 0 && (
+                  <View style={styles.modelChipsRow}>
+                    {currentPreset.popularModels.map((m) => (
+                      <Pressable
+                        key={m}
+                        style={[styles.modelChip, modelInput === m && styles.modelChipSelected]}
+                        onPress={() => setModelInput(m)}
+                      >
+                        <Text style={[styles.modelChipText, modelInput === m && styles.modelChipTextSelected]}>
+                          {m}
+                        </Text>
                       </Pressable>
-                    )}
+                    ))}
                   </View>
+                )}
+                <TextInput
+                  style={styles.keyInput}
+                  placeholder={`e.g. ${currentPreset.defaultModel || 'model-name'}`}
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={modelInput}
+                  onChangeText={setModelInput}
+                  autoCapitalize="none"
+                />
+
+                {/* Base URL (for Custom or Override) */}
+                {(selectedProviderId === 'custom' || currentPreset.defaultBaseUrl) && (
+                  <View style={{ marginTop: SPACING.xs }}>
+                    <Text style={styles.inputLabel}>API Base URL</Text>
+                    <TextInput
+                      style={styles.keyInput}
+                      placeholder={currentPreset.defaultBaseUrl || 'https://.../v1'}
+                      placeholderTextColor={COLORS.textTertiary}
+                      value={baseUrlInput}
+                      onChangeText={setBaseUrlInput}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.keyActions}>
+                  <Pressable
+                    style={styles.saveKeyBtn}
+                    onPress={handleSaveProvider}
+                    disabled={savingKeys}
+                  >
+                    {savingKeys ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={styles.saveKeyBtnText}>
+                        {isSelectedConfigured ? 'Update & Activate' : 'Save & Set as Active'}
+                      </Text>
+                    )}
+                  </Pressable>
                 </View>
-              )}
+              </View>
             </View>
 
             {/* ── Saved Work ── */}
@@ -455,6 +713,227 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // ── Active Engine Card ──
+  activeEngineCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}40`,
+    padding: SPACING.lg,
+    marginTop: SPACING.lg,
+    gap: SPACING.xs,
+  },
+  activeEngineTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${COLORS.primary}18`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}35`,
+  },
+  activePillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  activePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  activeProviderName: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  activeModelText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  activeHintText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // ── Provider Selector ──
+  providerScroll: {
+    marginBottom: SPACING.md,
+  },
+  providerScrollContent: {
+    gap: SPACING.sm,
+    paddingVertical: 4,
+  },
+  providerTab: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+    minWidth: 90,
+  },
+  providerTabSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceHighlight,
+  },
+  providerTabActiveBorder: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  providerTabHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  providerTabText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  providerTabTextSelected: {
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+  },
+  configuredDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  activeMiniBadge: {
+    backgroundColor: `${COLORS.primary}20`,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  activeMiniBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+
+  // ── Provider Config Inside Card ──
+  providerConfigHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  providerIconRing: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerConfigTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  providerConfigHint: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+  },
+  activeBadgeLarge: {
+    backgroundColor: `${COLORS.primary}15`,
+    borderColor: `${COLORS.primary}40`,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  activeBadgeLargeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  trashBtn: {
+    padding: 8,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.errorBg,
+  },
+  providerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  activateBtn: {
+    backgroundColor: `${COLORS.primary}18`,
+    borderColor: `${COLORS.primary}30`,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  activateBtnText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+
+  // ── Model Chips ──
+  modelChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  modelChip: {
+    backgroundColor: COLORS.surfaceHighlight,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  modelChipSelected: {
+    backgroundColor: `${COLORS.primary}15`,
+    borderColor: COLORS.primary,
+  },
+  modelChipText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    fontFamily: 'monospace',
+  },
+  modelChipTextSelected: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+
   // ── API Keys Card ──
   keysCard: {
     backgroundColor: COLORS.surface,
@@ -463,51 +942,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  keyStatusGrid: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  keyBadge: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.surfaceHighlight,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  keyBadgeActive: {
-    borderColor: `${COLORS.primary}50`,
-    backgroundColor: `${COLORS.primary}12`,
-  },
-  keyBadgeActiveAnthropic: {
-    borderColor: `${COLORS.secondary}50`,
-    backgroundColor: `${COLORS.secondary}12`,
-  },
-  keyBadgeText: {
-    color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '500',
-  },
-  keyBadgeTextActive: { color: COLORS.primary },
-  keyBadgeTextAnthropic: { color: COLORS.secondary },
   keysDivider: {
     height: 1,
     backgroundColor: COLORS.border,
     marginVertical: SPACING.md,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.xs,
-  },
-  toggleText: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
   },
   keyInputsWrapper: {
     marginTop: SPACING.md,

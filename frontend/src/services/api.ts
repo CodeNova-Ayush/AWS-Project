@@ -1,7 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CodeIssue, ChatMessage, User } from '../constants/types';
+import { CodeIssue, ChatMessage, User, ProviderModelsResponse } from '../constants/types';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+export function getApiBase(): string {
+  if (process.env.EXPO_PUBLIC_BACKEND_URL && !process.env.EXPO_PUBLIC_BACKEND_URL.includes('10.20.16.188')) {
+    return process.env.EXPO_PUBLIC_BACKEND_URL.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol || 'http:';
+    // Local development fallback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || /^10\.|^192\.168\./.test(hostname)) {
+      return `${protocol}//${hostname}:8000`;
+    }
+    // Production Cloud Deployment (AWS App Runner / CloudFront / Custom Domain)
+    return window.location.origin;
+  }
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+}
+
+const API_BASE = getApiBase();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await AsyncStorage.getItem('session_token');
@@ -68,13 +85,20 @@ export async function sendChatMessage(
   issueId: string,
   message: string,
   issueContext?: Record<string, any>,
+  provider?: string,
+  model?: string,
 ): Promise<ChatMessage> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/issues/${issueId}/chat`, {
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ message, issue_context: issueContext ?? null }),
+    body: JSON.stringify({
+      message,
+      issue_context: issueContext ?? null,
+      provider: provider || null,
+      model: model || null,
+    }),
   });
   if (!res.ok) throw new Error('Failed to send message');
   return res.json();
@@ -229,6 +253,69 @@ export async function fetchJobs(): Promise<any[]> {
   return res.json();
 }
 
+export interface ProviderStatus {
+  configured: boolean;
+  name: string;
+  base_url: string;
+  model: string;
+}
+
+export interface UserKeysStatus {
+  providers: Record<string, ProviderStatus>;
+  active_provider: string;
+  active_model: string;
+  has_openai_key: boolean;
+  has_anthropic_key: boolean;
+}
+
+export async function saveProviderKey(
+  provider: string,
+  apiKey: string,
+  model?: string,
+  baseUrl?: string,
+  setActive: boolean = true,
+): Promise<{ message: string; provider: string }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/user/keys`, {
+    method: 'PUT',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({
+      provider,
+      api_key: apiKey,
+      model: model || '',
+      base_url: baseUrl || '',
+      set_active: setActive,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to save provider key');
+  }
+  return res.json();
+}
+
+export async function setActiveProvider(provider: string, model?: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/user/keys/active`, {
+    method: 'PUT',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ provider, model: model || '' }),
+  });
+  if (!res.ok) throw new Error('Failed to set active provider');
+}
+
+export async function deleteProviderKey(provider: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/user/keys/${provider}`, {
+    method: 'DELETE',
+    headers,
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to delete provider key');
+}
+
 export async function saveUserKeys(openaiKey: string, anthropicKey: string): Promise<void> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/user/keys`, {
@@ -240,10 +327,63 @@ export async function saveUserKeys(openaiKey: string, anthropicKey: string): Pro
   if (!res.ok) throw new Error('Failed to save API keys');
 }
 
-export async function getUserKeyStatus(): Promise<{ has_openai_key: boolean; has_anthropic_key: boolean }> {
+export async function getUserKeyStatus(): Promise<UserKeysStatus> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/user/keys`, { headers, credentials: 'include' });
-  if (!res.ok) return { has_openai_key: false, has_anthropic_key: false };
+  if (!res.ok) {
+    return {
+      providers: {},
+      active_provider: '',
+      active_model: '',
+      has_openai_key: false,
+      has_anthropic_key: false,
+    };
+  }
+  return res.json();
+}
+
+export async function fetchProviderModels(
+  provider: string,
+  apiKey?: string,
+  baseUrl?: string
+): Promise<ProviderModelsResponse> {
+  const headers = await getAuthHeaders();
+  const params = new URLSearchParams({ provider });
+  if (apiKey) params.append('api_key', apiKey);
+  if (baseUrl) params.append('base_url', baseUrl);
+
+  const res = await fetch(`${API_BASE}/api/user/models?${params.toString()}`, {
+    headers,
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch models: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function testProviderConnection(
+  provider: string,
+  apiKey?: string,
+  model?: string,
+  baseUrl?: string
+): Promise<{ success: boolean; message?: string; error?: string; provider: string; model?: string }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/user/test-key`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({
+      provider,
+      api_key: apiKey || '',
+      model: model || '',
+      base_url: baseUrl || '',
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return { success: false, error: err.detail || 'Connection test failed', provider, model };
+  }
   return res.json();
 }
 

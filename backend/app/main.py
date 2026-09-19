@@ -12,6 +12,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import router
 from app.core.db import init_db
@@ -179,6 +181,60 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
     register_error_handlers(app)
+
+    @app.get("/health")
+    async def health_check():
+        return {"status": "ok", "service": "snippet-backend"}
+
+    # Check for exported frontend build
+    frontend_dist = None
+    for candidate in [
+        Path("/app/frontend/dist"),
+        Path(__file__).resolve().parent.parent.parent / "frontend" / "dist",
+        Path(__file__).resolve().parent.parent / "static",
+    ]:
+        if candidate.exists() and (candidate / "index.html").exists():
+            frontend_dist = candidate
+            break
+
+    if frontend_dist:
+        logger.info("Mounting frontend static bundle from %s", frontend_dist)
+        expo_dir = frontend_dist / "_expo"
+        if expo_dir.exists():
+            app.mount("/_expo", StaticFiles(directory=str(expo_dir)), name="expo_static")
+        assets_dir = frontend_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets_static")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa_app(full_path: str):
+            if full_path.startswith("api") or full_path in ["docs", "openapi.json", "redoc", "health"]:
+                return {"error": "Not found"}
+            if not full_path:
+                return FileResponse(frontend_dist / "index.html")
+            direct_file = frontend_dist / full_path
+            if direct_file.is_file():
+                return FileResponse(direct_file)
+            html_file = frontend_dist / f"{full_path}.html"
+            if html_file.is_file():
+                return FileResponse(html_file)
+            return FileResponse(frontend_dist / "index.html")
+    else:
+        @app.get("/")
+        async def root():
+            return {
+                "status": "online",
+                "service": "CodeTok Backend API",
+                "version": "1.0.0",
+                "docs_url": "/docs",
+                "endpoints": {
+                    "health": "/health",
+                    "issues": "/api/issues",
+                    "auth_me": "/api/auth/me",
+                    "saved_issues": "/api/saved-issues",
+                    "prs": "/api/prs"
+                }
+            }
 
     return app
 

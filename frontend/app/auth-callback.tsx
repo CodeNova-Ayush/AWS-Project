@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-nativ
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, FONT_SIZES } from '../src/constants/theme';
+import { getApiBase } from '../src/services/api';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -16,23 +17,34 @@ export default function AuthCallback() {
 
   async function processAuth() {
     try {
-      let code: string | null = null;
-
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
-        code = urlParams.get('code');
+        const sessionToken = urlParams.get('session_token');
+        const code = urlParams.get('code');
+
+        if (sessionToken) {
+          await AsyncStorage.setItem('session_token', sessionToken);
+          router.replace('/feed');
+          return;
+        }
 
         if (code) {
-          // This page is loaded inside the in-app browser (WebBrowser.openAuthSessionAsync).
-          // Do a full-page redirect to the backend callback with mobile=true.
-          // The backend will exchange the code and return an HTTP 302 redirect
-          // to frontend://auth-callback?session_token=XXX, which
-          // ASWebAuthenticationSession will intercept and dismiss the browser.
-          const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-          const backendCallback = `${API_BASE}/api/auth/github/callback?code=${code}&mobile=true`;
-          console.log('🔵 auth-callback: redirecting to backend for mobile flow:', backendCallback);
-          window.location.href = backendCallback;
-          return;
+          const API_BASE = getApiBase();
+          const res = await fetch(`${API_BASE}/api/auth/github/callback?code=${code}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+
+          if (!res.ok) {
+            const err = await res.text();
+            throw new Error(`Failed to exchange code: ${err}`);
+          }
+
+          const data = await res.json();
+          if (data.session_token) {
+            await AsyncStorage.setItem('session_token', data.session_token);
+            router.replace('/feed');
+            return;
+          }
         }
       }
 

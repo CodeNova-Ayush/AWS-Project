@@ -90,16 +90,25 @@ async def get_personal_issues(
 
 @router.get("/issues/org")
 async def get_org_issues(
-    force: bool = Query(False), db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    force: bool = Query(False),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     try:
         return await pr_service.fetch_org_issues(db, force=force)
-    except httpx.HTTPStatusError as exc:
-        logger.error("GitHub API error: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch from GitHub App")
-    except ValueError as exc:
-        logger.error("GitHub App config error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+    except (httpx.HTTPStatusError, ValueError) as exc:
+        logger.warning("GitHub App fetch_org_issues unavailable: %s. Falling back to personal/seeded issues.", exc)
+        user = await get_current_user(request, db)
+        if user and user.get("github_access_token"):
+            try:
+                personal_issues = await pr_service.fetch_personal_issues(
+                    db, user["github_access_token"], user["user_id"], force=force
+                )
+                if personal_issues:
+                    return personal_issues
+            except Exception as e:
+                logger.warning("Failed to fallback to personal issues: %s", e)
+        return await issue_repo.get_all_issues(db)
 
 
 @router.get("/issues/{issue_id}")
@@ -189,16 +198,23 @@ async def get_personal_prs(
 
 @router.get("/prs/org")
 async def get_org_prs(
-    force: bool = Query(False), db: AsyncIOMotorDatabase = Depends(get_db)
+    request: Request,
+    force: bool = Query(False),
+    db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     try:
         return await pr_service.fetch_org_prs(db, force=force)
-    except httpx.HTTPStatusError as exc:
-        logger.error("GitHub API error: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch from GitHub App")
-    except ValueError as exc:
-        logger.error("GitHub App config error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+    except (httpx.HTTPStatusError, ValueError) as exc:
+        logger.warning("GitHub App fetch_org_prs unavailable: %s. Falling back to personal PRs.", exc)
+        user = await get_current_user(request, db)
+        if user and user.get("github_access_token"):
+            try:
+                return await pr_service.fetch_personal_prs(
+                    db, user["github_access_token"], user["user_id"], force=force
+                )
+            except Exception as e:
+                logger.warning("Failed to fallback to personal PRs: %s", e)
+        return []
 
 
 # ──── Seed data ────

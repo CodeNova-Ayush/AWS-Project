@@ -15,12 +15,16 @@ class UserModel(BaseModel):
 class ChatMessageIn(BaseModel):
     message: str
     issue_context: Optional[dict] = None  # Full issue data sent from frontend
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 class ChatMessageOut(BaseModel):
     role: str
     content: str
     timestamp: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 class AgentAssignRequest(BaseModel):

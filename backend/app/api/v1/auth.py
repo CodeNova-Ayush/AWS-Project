@@ -137,6 +137,14 @@ async def github_callback(
         logger.info("Mobile OAuth: redirecting to %s", app_url)
         return RedirectResponse(url=app_url)
 
+    # If accessed directly via browser navigation, redirect to frontend auth-callback with token
+    accept_header = request.headers.get("accept", "")
+    if "text/html" in accept_header:
+        web_url = f"http://localhost:8081/auth-callback?session_token={session_token}"
+        logger.info("Web browser OAuth: redirecting to %s", web_url)
+        return RedirectResponse(url=web_url)
+
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     user["session_token"] = session_token
     return user
+

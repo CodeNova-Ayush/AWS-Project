@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
-import { fetchMe } from '../src/services/api';
+import { fetchMe, getApiBase } from '../src/services/api';
 import { COLORS, SPACING, BORDER_RADIUS } from '../src/constants/theme';
 import MatrixRain from '../src/components/MatrixRain';
 
@@ -79,7 +79,7 @@ export default function LoginScreen() {
 
   async function handleGitHubLogin() {
     try {
-      const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+      const API_BASE = getApiBase();
       const res = await fetch(
         `${API_BASE}/api/auth/github/login${Platform.OS !== 'web' ? '?platform=mobile' : ''}`
       );

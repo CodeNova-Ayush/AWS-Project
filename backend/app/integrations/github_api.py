@@ -109,7 +109,7 @@ async def fetch_pr_files(
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files",
             headers=headers,
@@ -117,6 +117,45 @@ async def fetch_pr_files(
         )
         response.raise_for_status()
         return response.json()
+
+
+async def fetch_pr_details(owner: str, repo: str, pr_number: int, token: str) -> Dict:
+    """Fetch complete PR object including mergeable, mergeable_state, additions, deletions, base, head."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            headers=headers,
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def fetch_pr_check_runs(owner: str, repo: str, head_sha: str, token: str) -> List[Dict]:
+    """Fetch CI/CD check runs for a commit SHA."""
+    if not head_sha:
+        return []
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/commits/{head_sha}/check-runs",
+                headers=headers,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("check_runs", [])
+    except Exception:
+        pass
+    return []
 
 
 def parse_diff_to_lines(patch: str) -> List[Dict]:

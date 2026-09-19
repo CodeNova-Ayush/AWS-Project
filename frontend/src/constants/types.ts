@@ -41,6 +41,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface User {
@@ -50,3 +52,21 @@ export interface User {
   picture: string;
   github_username?: string;
 }
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  description: string;
+  tag: string;
+}
+
+export interface ProviderModelsResponse {
+  provider: string;
+  is_live: boolean;
+  count?: number;
+  models: ProviderModel[];
+  default_model: string;
+  message?: string;
+  error?: string;
+}
+

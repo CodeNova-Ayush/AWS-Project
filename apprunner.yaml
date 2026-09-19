@@ -1,0 +1,22 @@
+version: 1.0
+runtime: python311
+build:
+  commands:
+    pre-build:
+      - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      - apt-get install -y nodejs
+      - cd frontend && npm install --legacy-peer-deps && npx expo export --platform web && cd ..
+    build:
+      - cd backend && pip install -r requirements.txt && cd ..
+run:
+  command: python backend/main.py
+  network:
+    port: 8000
+    env: PORT
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PORT
+      value: "8000"
+    - name: DB_NAME
+      value: "codetok"
