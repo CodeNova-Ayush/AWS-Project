@@ -1,0 +1,252 @@
+{
+  "project_name": "CodeTok - AI Bug Agent Platform",
+  "app_type": "React Native Expo Mobile App",
+  "design_philosophy": {
+    "identity": "The Cyberpunk IDE",
+    "core_metaphor": "Doomscrolling for Productivity",
+    "principles": [
+      "Fusion over Imitation: IDE density x TikTok fluidity",
+      "Emotion First: Green is relief, Red is alert, Lime is action",
+      "Content is King: The Code Diff is the hero",
+      "Negative Space: Don't choke the code; let the surrounding UI breathe"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "background": "#050505",
+      "surface": "#121212",
+      "surface_highlight": "#1E1E1E",
+      "border": "#27272A",
+      "primary": "#D0FD3E",
+      "primary_foreground": "#000000",
+      "secondary": "#7C3AED",
+      "secondary_foreground": "#FFFFFF",
+      "accent": "#00E5FF",
+      "success": "#22C55E",
+      "success_bg": "rgba(34, 197, 94, 0.1)",
+      "error": "#EF4444",
+      "error_bg": "rgba(239, 68, 68, 0.1)",
+      "warning": "#F59E0B",
+      "info": "#3B82F6",
+      "text_primary": "#FFFFFF",
+      "text_secondary": "#A1A1AA",
+      "text_tertiary": "#52525B",
+      "code_bg": "#0A0A0A"
+    },
+    "typography": {
+      "families": {
+        "ui": "System",
+        "code": "Courier New"
+      },
+      "sizes": {
+        "xs": 12,
+        "sm": 14,
+        "md": 16,
+        "lg": 20,
+        "xl": 24,
+        "2xl": 32,
+        "3xl": 40
+      },
+      "weights": {
+        "regular": "400",
+        "medium": "500",
+        "semibold": "600",
+        "bold": "700",
+        "black": "900"
+      },
+      "line_heights": {
+        "tight": 1.1,
+        "normal": 1.5,
+        "relaxed": 1.75
+      }
+    },
+    "spacing": {
+      "xs": 4,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24,
+      "2xl": 32,
+      "3xl": 48,
+      "4xl": 64
+    },
+    "border_radius": {
+      "sm": 4,
+      "md": 8,
+      "lg": 12,
+      "xl": 16,
+      "full": 9999
+    }
+  },
+  "components": {
+    "CodeIssueCard": {
+      "description": "Full-screen viewport height card displaying a single code issue.",
+      "layout": "Flexbox column, full width, full height",
+      "style_guide": {
+        "container": {
+          "backgroundColor": "colors.background",
+          "padding": "spacing.lg",
+          "borderBottomWidth": 1,
+          "borderColor": "colors.border"
+        },
+        "header_badges": {
+          "flexDirection": "row",
+          "gap": "spacing.sm",
+          "marginBottom": "spacing.md"
+        },
+        "title": {
+          "fontSize": "sizes.xl",
+          "fontWeight": "weights.bold",
+          "color": "colors.text_primary",
+          "marginBottom": "spacing.sm"
+        }
+      }
+    },
+    "DiffViewer": {
+      "description": "Component to render code differences with red/green highlights.",
+      "layout": "Scrollable internal view (if content exceeds card height, though discouraged)",
+      "style_guide": {
+        "container": {
+          "backgroundColor": "colors.code_bg",
+          "borderRadius": "border_radius.md",
+          "padding": "spacing.sm",
+          "fontFamily": "typography.families.code"
+        },
+        "line_add": {
+          "backgroundColor": "colors.success_bg",
+          "color": "colors.success"
+        },
+        "line_del": {
+          "backgroundColor": "colors.error_bg",
+          "color": "colors.error"
+        }
+      }
+    },
+    "ActionSidebar": {
+      "description": "Floating right-side vertical bar for primary actions (TikTok style).",
+      "layout": "Absolute position, right: 10, bottom: 120",
+      "style_guide": {
+        "container": {
+          "flexDirection": "column",
+          "gap": "spacing.xl",
+          "alignItems": "center"
+        },
+        "button": {
+          "width": 48,
+          "height": 48,
+          "borderRadius": "border_radius.full",
+          "backgroundColor": "rgba(30, 30, 30, 0.6)",
+          "backdropFilter": "blur(10px)",
+          "justifyContent": "center",
+          "alignItems": "center"
+        },
+        "label": {
+          "fontSize": "sizes.xs",
+          "color": "colors.text_primary",
+          "marginTop": "spacing.xs",
+          "fontWeight": "weights.medium"
+        }
+      }
+    },
+    "AIChatSheet": {
+      "description": "Bottom sheet modal for conversing with Claude Sonnet 4.5 about the specific issue.",
+      "layout": "Overlay, slides up from bottom",
+      "style_guide": {
+        "container": {
+          "backgroundColor": "colors.surface",
+          "borderTopLeftRadius": "border_radius.xl",
+          "borderTopRightRadius": "border_radius.xl",
+          "padding": "spacing.lg"
+        },
+        "input": {
+          "backgroundColor": "colors.surface_highlight",
+          "borderRadius": "border_radius.full",
+          "padding": "spacing.md",
+          "color": "colors.text_primary"
+        }
+      }
+    },
+    "AgentTrajectory": {
+      "description": "Visual timeline of AI's thought process (Investigation -> Identification -> Fix).",
+      "style_guide": {
+        "container": {
+          "flexDirection": "row",
+          "alignItems": "center",
+          "padding": "spacing.md",
+          "backgroundColor": "rgba(124, 58, 237, 0.1)",
+          "borderRadius": "border_radius.lg",
+          "marginTop": "spacing.md"
+        },
+        "step_dot": {
+          "width": 8,
+          "height": 8,
+          "borderRadius": "border_radius.full",
+          "backgroundColor": "colors.secondary"
+        },
+        "connector": {
+          "height": 2,
+          "flex": 1,
+          "backgroundColor": "colors.secondary",
+          "opacity": 0.3
+        }
+      }
+    }
+  },
+  "assets": {
+    "icons": {
+      "library": "@expo/vector-icons",
+      "map": {
+        "bug": "Bug (Feather)",
+        "performance": "Zap (Feather)",
+        "suggestion": "MessageSquare (Feather)",
+        "chat": "MessageCircle (Feather)",
+        "save": "Bookmark (Feather)",
+        "apply": "Play (Feather)",
+        "share": "Share2 (Feather)",
+        "user": "User (Feather)",
+        "close": "X (Feather)",
+        "send": "Send (Feather)"
+      }
+    },
+    "images": {
+      "avatars": [
+        "https://images.unsplash.com/photo-1617925357736-8a4ea869b800?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBzb2Z0d2FyZSUyMGRldmVsb3BlciUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNTAzODYyfDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1737574107736-9e02ca5d5387?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBzb2Z0d2FyZSUyMGRldmVsb3BlciUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNTAzODYyfDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1653732212701-b729f0b08330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBzb2Z0d2FyZSUyMGRldmVsb3BlciUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNTAzODYyfDA&ixlib=rb-4.1.0&q=85"
+      ],
+      "backgrounds": [
+        "https://images.unsplash.com/photo-1761078739233-629de9252840?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHxjeWJlcnB1bmslMjBhYnN0cmFjdCUyMHRlY2glMjBiYWNrZ3JvdW5kJTIwZGFya3xlbnwwfHx8fDE3NzE1MDM4NjF8MA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1762278804855-ebc8fbbc3105?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwzfHxjeWJlcnB1bmslMjBhYnN0cmFjdCUyMHRlY2glMjBiYWNrZ3JvdW5kJTIwZGFya3xlbnwwfHx8fDE3NzE1MDM4NjF8MA&ixlib=rb-4.1.0&q=85"
+      ]
+    }
+  },
+  "libraries": {
+    "animation": "react-native-reanimated",
+    "gestures": "react-native-gesture-handler",
+    "blur": "expo-blur",
+    "haptics": "expo-haptics",
+    "navigation": "expo-router",
+    "icons": "@expo/vector-icons"
+  },
+  "instructions_to_main_agent": [
+    "Strictly use React Native `StyleSheet` for styling. No CSS/Tailwind.",
+    "Ensure `CodeIssueCard` takes up exactly the screen height (minus safe areas if needed, or immersive).",
+    "Use `FlatList` with `pagingEnabled` for the main feed.",
+    "For the code diff, do not use a WebView. Render native `Text` components within a `ScrollView` if the code is long, but prioritize showing the *changed* lines.",
+    "Implement the 'ActionSidebar' on top of the content with absolute positioning and high z-index.",
+    "Use `expo-haptics` for tactile feedback on Save/Apply actions.",
+    "For the 'Agent Trajectory', create a simple step-indicator component using View and flexbox.",
+    "Data Mocking: Create a robust `mock_issues.js` file with realistic code snippets (Python/JS/React) to populate the feed.",
+    "Google Login: Use a visually distinct button on the Login screen. 'Sign in with Google' with the G logo."
+  ],
+  "universal_guidelines": [
+    "Use `SafeAreaView` from `react-native-safe-area-context` to handle notches.",
+    "Always set `StatusBar` style to 'light' for this dark theme app.",
+    "Touch targets must be at least 44x44 points. Add `hitSlop` if visual size is smaller.",
+    "Use `Pressable` instead of `TouchableOpacity` for better control over press states.",
+    "For icons, use `@expo/vector-icons/Feather` as the primary set for a clean, developer-focused look.",
+    "Avoid `console.log` in production code. Use a logger utility.",
+    "Ensure all text has a defined color; React Native defaults can vary by system theme."
+  ]
+}
