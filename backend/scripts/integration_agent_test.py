@@ -9,8 +9,8 @@ import uuid
 # Add backend dir to path so we can import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from github_app import get_installation_token
-from github_api import fetch_installation_repos, fetch_repo_issues
+from app.integrations.github_app import get_installation_token
+from app.integrations.github_api import fetch_installation_repos, fetch_repo_issues
 from agent_manager import run_agent_job
 from motor.motor_asyncio import AsyncIOMotorClient
 

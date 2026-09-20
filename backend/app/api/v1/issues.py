@@ -181,15 +181,18 @@ async def get_personal_prs(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     user = await get_current_user(request, db)
-    user_id = user["user_id"] if user else "user_demo_local"
-    token = (user.get("github_access_token") if user else "") or getattr(settings, "github_token", "")
+    if not user:
+        return await issue_repo.get_all_issues(db)
+
+    user_id = user["user_id"]
+    token = user.get("github_access_token", "")
     try:
         return await pr_service.fetch_personal_prs(
             db, token, user_id, force=force
         )
     except Exception as exc:
-        logger.error("Error fetching personal PRs: %s", exc)
-        return await issue_repo.get_all_issues(db)
+        logger.error("Error fetching personal PRs for %s: %s", user.get("github_username"), exc)
+        return []
 
 
 @router.get("/prs/org")
@@ -199,26 +202,18 @@ async def get_org_prs(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     user = await get_current_user(request, db)
-    user_id = user["user_id"] if user else "user_demo_local"
-    token = (user.get("github_access_token") if user else "") or getattr(settings, "github_token", "")
+    if not user:
+        return await issue_repo.get_all_issues(db)
 
-    # If user is authenticated with GitHub, display their real PRs
-    if token:
-        try:
-            prs = await pr_service.fetch_personal_prs(db, token, user_id, force=force)
-            if prs:
-                return prs
-        except Exception as exc:
-            logger.warning("Error fetching personal PRs for org tab: %s", exc)
-
+    user_id = user["user_id"]
+    token = user.get("github_access_token", "")
     try:
-        prs = await pr_service.fetch_org_prs(db, force=force)
-        if prs:
-            return prs
+        return await pr_service.fetch_org_prs(
+            db, token=token, user_id=user_id, force=force
+        )
     except Exception as exc:
-        logger.warning("GitHub App fetch_org_prs unavailable: %s", exc)
-
-    return await pr_service.fetch_personal_prs(db, token, user_id, force=force)
+        logger.warning("Error fetching org PRs for %s: %s", user.get("github_username"), exc)
+        return []
 
 
 # ──── Seed data ────

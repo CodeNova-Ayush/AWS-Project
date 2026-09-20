@@ -23,6 +23,9 @@ import CodeBackground from '../../src/components/CodeBackground';
 import Toast, { ToastType } from '../../src/components/Toast';
 import PRActionModal, { PRActionMode, MergeMethod } from '../../src/components/PRActionModal';
 import CreateIssueModal from '../../src/components/CreateIssueModal';
+import CILogModal from '../../src/components/CILogModal';
+import FullDiffModal from '../../src/components/FullDiffModal';
+import { CIInfo, ParsedDiffFile, DiffMetrics } from '../../src/utils/cardHelpers';
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -36,10 +39,27 @@ export default function FeedScreen() {
   const [assignAgentVisible, setAssignAgentVisible] = useState(false);
   const [createIssueVisible, setCreateIssueVisible] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'org' | 'repos'>('org');
+  const [activeTab, setActiveTab] = useState<'org' | 'repos'>('repos');
   const [filterType, setFilterType] = useState<'prs' | 'issues'>('prs');
   const [forceReloading, setForceReloading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  // CI Log modal state
+  const [ciModalVisible, setCiModalVisible] = useState(false);
+  const [selectedCIInfo, setSelectedCIInfo] = useState<CIInfo | null>(null);
+  const [ciRepoName, setCiRepoName] = useState('');
+  const [ciBranchName, setCiBranchName] = useState('');
+
+  // Full Diff modal state
+  const [fullDiffModalVisible, setFullDiffModalVisible] = useState(false);
+  const [diffModalFiles, setDiffModalFiles] = useState<ParsedDiffFile[]>([]);
+  const [diffModalMetrics, setDiffModalMetrics] = useState<DiffMetrics>({
+    additions: 13,
+    deletions: 0,
+    filesCount: 1,
+    summaryText: '+13 -0 • 1 file',
+  });
+  const [diffModalTitle, setDiffModalTitle] = useState('');
 
   // Toast state
   const [toastVisible, setToastVisible] = useState(false);
@@ -90,7 +110,7 @@ export default function FeedScreen() {
 
       let issuesData: CodeIssue[];
       if (userData) {
-        issuesData = filterType === 'prs' ? await fetchOrgPRs() : await fetchOrgIssues();
+        issuesData = filterType === 'prs' ? await fetchPersonalPRs() : await fetchPersonalIssues();
         const ids = await fetchSavedIds();
         setSavedIds(new Set(ids));
       } else {
@@ -261,6 +281,20 @@ export default function FeedScreen() {
     }
   }
 
+  function handleOpenCI(ciInfo: CIInfo, repo: string, branch: string) {
+    setSelectedCIInfo(ciInfo);
+    setCiRepoName(repo);
+    setCiBranchName(branch);
+    setCiModalVisible(true);
+  }
+
+  function handleOpenFullDiff(files: ParsedDiffFile[], metrics: DiffMetrics, prTitle: string) {
+    setDiffModalFiles(files);
+    setDiffModalMetrics(metrics);
+    setDiffModalTitle(prTitle);
+    setFullDiffModalVisible(true);
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -289,7 +323,13 @@ export default function FeedScreen() {
         ref={flatListRef}
         data={issues}
         keyExtractor={(item) => item.issue_id}
-        renderItem={({ item }) => <CodeIssueCard issue={item} />}
+        renderItem={({ item }) => (
+          <CodeIssueCard
+            issue={item}
+            onOpenCI={handleOpenCI}
+            onOpenFullDiff={handleOpenFullDiff}
+          />
+        )}
         pagingEnabled
         showsVerticalScrollIndicator={false}
         snapToInterval={height}
@@ -308,86 +348,91 @@ export default function FeedScreen() {
             <Text style={styles.emptyTitle}>
               {filterType === 'prs' ? "Damn, you're all clear with the PRs!" : "Damn dude, no issues found!"}
             </Text>
-            <Text style={styles.emptyDesc}>Go touch some grass or switch filters.</Text>
+            <Text style={styles.emptyDesc}>
+              {user
+                ? `No ${filterType === 'prs' ? 'open PRs' : 'open issues'} found for @${user.github_username || user.name || 'you'}.`
+                : 'Go touch some grass or switch filters.'}
+            </Text>
           </View>
         )}
         testID="issue-feed"
       />
 
-      {/* Top Navigation */}
+      {/* Sleek Ultra-Compact Top Navigation (< 42px height, gives >85% to PR card) */}
       <SafeAreaView edges={['top']} style={styles.topBar}>
-        <View style={styles.topBarInner}>
-          <View style={{ flexDirection: 'column', gap: 4, position: 'relative' }}>
-            <View style={[styles.tabRow, { paddingRight: 40 }]}>
-              <Pressable
-                onPress={() => setActiveTab('org')}
-                style={[styles.tab, activeTab === 'org' && styles.tabActive]}
-                testID="tab-organisation"
-              >
-                <Text style={[styles.tabText, activeTab === 'org' && styles.tabTextActive]}>
-                  Organisation
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setActiveTab('repos')}
-                style={[styles.tab, activeTab === 'repos' && styles.tabActive]}
-                testID="tab-repos"
-              >
-                <Text style={[styles.tabText, activeTab === 'repos' && styles.tabTextActive]}>
-                  My Repos
-                </Text>
-              </Pressable>
-              <View style={{ flex: 1 }} />
-              <Pressable
-                onPress={handleForceReload}
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: -2,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: COLORS.error,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-                hitSlop={8}
-              >
-                {forceReloading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather name="refresh-cw" size={14} color="#fff" />
-                )}
-              </Pressable>
-            </View>
-            <View style={[styles.tabRow, { gap: 16, marginTop: 16 }]}>
-              <Pressable onPress={() => setFilterType('prs')}>
-                <Text style={[styles.subTabText, filterType === 'prs' && styles.subTabTextActive]}>
-                  PRs
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => setFilterType('issues')}>
-                <Text style={[styles.subTabText, filterType === 'issues' && styles.subTabTextActive]}>
-                  Issues
-                </Text>
-              </Pressable>
-              
-              <View style={{ flex: 1 }} />
-              
-              <Pressable 
-                style={styles.createIssueBtn} 
-                onPress={() => {
-                  if (!user) {
-                    Alert.alert('Sign in required', 'Please sign in to create an issue.');
-                    return;
-                  }
-                  setCreateIssueVisible(true);
-                }}
-              >
-                <Feather name="plus-circle" size={14} color={COLORS.primary} />
-                <Text style={styles.createIssueBtnText}>Create Request</Text>
-              </Pressable>
-            </View>
+        <View style={styles.compactHeaderRow}>
+          {/* Org vs Repos scope pill */}
+          <View style={styles.scopeSegment}>
+            <Pressable
+              onPress={() => setActiveTab('org')}
+              style={[styles.scopeBtn, activeTab === 'org' && styles.scopeBtnActive]}
+              testID="tab-organisation"
+            >
+              <Text style={[styles.scopeText, activeTab === 'org' && styles.scopeTextActive]}>
+                Org
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveTab('repos')}
+              style={[styles.scopeBtn, activeTab === 'repos' && styles.scopeBtnActive]}
+              testID="tab-repos"
+            >
+              <Text style={[styles.scopeText, activeTab === 'repos' && styles.scopeTextActive]}>
+                My Repos
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* PRs vs Issues pill */}
+          <View style={styles.typeSegment}>
+            <Pressable
+              onPress={() => setFilterType('prs')}
+              style={[styles.typeBtn, filterType === 'prs' && styles.typeBtnActive]}
+            >
+              <Text style={[styles.typeBtnText, filterType === 'prs' && styles.typeBtnTextActive]}>
+                PRs
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setFilterType('issues')}
+              style={[styles.typeBtn, filterType === 'issues' && styles.typeBtnActive]}
+            >
+              <Text style={[styles.typeBtnText, filterType === 'issues' && styles.typeBtnTextActive]}>
+                Issues
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{ flex: 1 }} />
+
+          {/* + Request & Refresh buttons */}
+          <View style={styles.actionGroup}>
+            <Pressable
+              style={styles.compactCreateBtn}
+              onPress={() => {
+                if (!user) {
+                  Alert.alert('Sign in required', 'Please sign in to create an issue.');
+                  return;
+                }
+                setCreateIssueVisible(true);
+              }}
+              hitSlop={6}
+            >
+              <Feather name="plus" size={13} color={COLORS.primary} />
+              <Text style={styles.compactCreateText}>Request</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleForceReload}
+              style={styles.compactReloadBtn}
+              hitSlop={8}
+            >
+              {forceReloading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="refresh-cw" size={12} color="#fff" />
+              )}
+            </Pressable>
           </View>
         </View>
       </SafeAreaView>
@@ -452,12 +497,34 @@ export default function FeedScreen() {
           visible={prModalVisible}
           mode={prModalMode}
           prTitle={currentIssue.title}
+          prNumber={currentIssue.github_pr_number || 2}
+          baseBranch={currentIssue.base_branch || 'main'}
           onClose={() => setPrModalVisible(false)}
           onApprove={executePRApprove}
           onReject={executePRReject}
           onMerge={executePRMerge}
         />
       )}
+
+      {/* CI / CD Log Modal */}
+      {selectedCIInfo && (
+        <CILogModal
+          visible={ciModalVisible}
+          onClose={() => setCiModalVisible(false)}
+          ciInfo={selectedCIInfo}
+          repoName={ciRepoName}
+          branchName={ciBranchName}
+        />
+      )}
+
+      {/* Tap-to-Expand Full Diff Modal */}
+      <FullDiffModal
+        visible={fullDiffModalVisible}
+        onClose={() => setFullDiffModalVisible(false)}
+        files={diffModalFiles}
+        metrics={diffModalMetrics}
+        prTitle={diffModalTitle}
+      />
 
       {/* Create Issue Modal */}
       <CreateIssueModal
@@ -500,62 +567,96 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 50,
-    backgroundColor: 'rgba(5, 5, 5, 0.95)',
+    backgroundColor: 'rgba(5, 5, 8, 0.82)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: 'rgba(255,255,255,0.07)',
   },
-  topBarInner: {
+  compactHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+    gap: 8,
   },
-  tabRow: {
+  scopeSegment: {
     flexDirection: 'row',
-    gap: SPACING.xl,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: BORDER_RADIUS.full,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  tab: {
-    paddingVertical: SPACING.sm,
+  scopeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.full,
   },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
+  scopeBtnActive: {
+    backgroundColor: 'rgba(208, 253, 62, 0.2)',
   },
-  tabText: {
+  scopeText: {
     color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.md,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
   },
-  tabTextActive: {
-    color: COLORS.textPrimary,
-    fontWeight: '700',
-  },
-  subTabText: {
-    color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '500',
-  },
-  subTabTextActive: {
+  scopeTextActive: {
     color: COLORS.primary,
     fontWeight: '700',
   },
-  createIssueBtn: {
+  typeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  typeBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  typeBtnActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  typeBtnText: {
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeBtnTextActive: {
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: 'rgba(208, 253, 62, 0.1)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
     borderColor: 'rgba(208, 253, 62, 0.3)',
   },
-  createIssueBtnText: {
+  compactCreateText: {
     color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  compactReloadBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   emptyContainer: {
     justifyContent: 'center',

@@ -4,9 +4,8 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from github_app import get_installation_token
-from github_api import fetch_installation_repos, fetch_repo_prs
+from app.integrations.github_app import get_installation_token
+from app.integrations.github_api import fetch_installation_repos, fetch_repo_prs
 
 async def main():
     load_dotenv(Path(__file__).parent.parent / '.env')

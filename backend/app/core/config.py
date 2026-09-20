@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     fernet_secret_key: str = ""
 
     # GitHub OAuth & User
-    github_username: str = "iamksr05"
+    github_username: str = ""
     github_token: str = ""
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""

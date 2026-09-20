@@ -29,12 +29,26 @@ export interface CodeIssue {
   github_labels?: Array<{ name: string; color: string }>;
   github_issue_number?: number;
   github_issue_url?: string;
+  github_user?: string;
   agent_job_id?: string;
   agent_summary?: string;
   agent_traces?: TrajectoryStep[];
   agent_duration?: number;
   agent_lines_changed?: number;
   agent_type?: string;
+  ai_risk?: 'LOW' | 'MEDIUM' | 'HIGH';
+  ai_summary_bullets?: string[];
+  author_name?: string;
+  author_avatar?: string;
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
+  files?: Array<{ filename: string; additions: number; deletions: number; patch?: string }>;
+  ci_status?: 'passed' | 'failed' | 'pending';
+  ci_passed_count?: number;
+  ci_total_count?: number;
+  ci_failure_log?: string;
+  base_branch?: string;
 }
 
 export interface ChatMessage {

@@ -30,6 +30,8 @@ interface PRActionModalProps {
   visible: boolean;
   mode: PRActionMode;
   prTitle: string;
+  prNumber?: number;
+  baseBranch?: string;
   onClose: () => void;
   onApprove: () => Promise<void>;
   onReject: (comment: string) => Promise<void>;
@@ -37,21 +39,23 @@ interface PRActionModalProps {
 }
 
 const MERGE_METHODS: { value: MergeMethod; label: string; desc: string }[] = [
-  { value: 'merge',   label: 'Merge commit',    desc: 'Preserve full history' },
-  { value: 'squash',  label: 'Squash & merge',  desc: 'Single commit on base branch' },
+  { value: 'squash',  label: 'Squash & merge',  desc: 'Single commit on base branch (Recommended)' },
+  { value: 'merge',   label: 'Merge commit',    desc: 'Preserve full branch history' },
   { value: 'rebase',  label: 'Rebase & merge',  desc: 'Linear history, no merge commit' },
 ];
 
 const MODE_CONFIG: Record<PRActionMode, { title: string; icon: keyof typeof Feather.glyphMap; color: string; ctaLabel: string }> = {
-  approve: { title: 'Approve PR', icon: 'check-circle', color: '#4ade80', ctaLabel: 'Approve' },
+  approve: { title: 'Approve PR', icon: 'check-circle', color: '#4ade80', ctaLabel: 'Approve Pull Request' },
   reject:  { title: 'Request Changes', icon: 'x-circle', color: '#f87171', ctaLabel: 'Request Changes' },
-  merge:   { title: 'Merge PR', icon: 'git-merge', color: '#a78bfa', ctaLabel: 'Merge Pull Request' },
+  merge:   { title: 'Merge Safety Gate', icon: 'shield', color: '#a78bfa', ctaLabel: 'Confirm & Merge PR' },
 };
 
 export default function PRActionModal({
   visible,
   mode,
   prTitle,
+  prNumber = 2,
+  baseBranch = 'main',
   onClose,
   onApprove,
   onReject,
@@ -59,7 +63,7 @@ export default function PRActionModal({
 }: PRActionModalProps) {
   const [loading, setLoading] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
-  const [mergeMethod, setMergeMethod] = useState<MergeMethod>('merge');
+  const [mergeMethod, setMergeMethod] = useState<MergeMethod>('squash');
   const [commitTitle, setCommitTitle] = useState('');
 
   const slideAnim = useRef(new Animated.Value(400)).current;
@@ -164,10 +168,24 @@ export default function PRActionModal({
               </View>
             )}
 
-            {/* Merge mode — method picker + commit title */}
+            {/* Merge mode — Safety Gate + method picker + commit title */}
             {mode === 'merge' && (
               <View style={styles.section}>
-                <Text style={styles.fieldLabel}>Merge method</Text>
+                {/* Safety Confirmation Box */}
+                <View style={styles.safetyGateBox}>
+                  <View style={styles.safetyGateHeader}>
+                    <Feather name="shield" size={18} color="#f59e0b" />
+                    <Text style={styles.safetyGateTitle}>Merge Safety Gate</Text>
+                  </View>
+                  <Text style={styles.safetyGateQuestion}>
+                    Merge PR #{prNumber} into {baseBranch} via {MERGE_METHODS.find(m => m.value === mergeMethod)?.label}?
+                  </Text>
+                  <Text style={styles.safetyGateNote}>
+                    Safety verification prevents accidental taps beside Reject. This will directly write commit(s) to branch '{baseBranch}'.
+                  </Text>
+                </View>
+
+                <Text style={[styles.fieldLabel, { marginTop: SPACING.md }]}>Merge method</Text>
                 {MERGE_METHODS.map((m) => (
                   <Pressable
                     key={m.value}
@@ -192,10 +210,10 @@ export default function PRActionModal({
                   </Pressable>
                 ))}
 
-                <Text style={[styles.fieldLabel, { marginTop: SPACING.lg }]}>Commit title (optional)</Text>
+                <Text style={[styles.fieldLabel, { marginTop: SPACING.md }]}>Commit title (optional)</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Merge pull request #..."
+                  placeholder={`Merge pull request #${prNumber}`}
                   placeholderTextColor={COLORS.textTertiary}
                   value={commitTitle}
                   onChangeText={setCommitTitle}
@@ -206,21 +224,35 @@ export default function PRActionModal({
             )}
           </ScrollView>
 
-          {/* CTA Button */}
-          <Pressable
-            style={[styles.cta, { backgroundColor: cfg.color }, loading && styles.ctaDisabled]}
-            onPress={handleCTA}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#000" />
-            ) : (
-              <>
-                <Feather name={cfg.icon} size={16} color="#000" />
-                <Text style={styles.ctaText}>{cfg.ctaLabel}</Text>
-              </>
+          {/* CTA Button & Cancel */}
+          <View style={{ gap: 10, marginTop: SPACING.md }}>
+            <Pressable
+              style={[styles.cta, { backgroundColor: cfg.color }, loading && styles.ctaDisabled]}
+              onPress={handleCTA}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <>
+                  <Feather name={cfg.icon} size={16} color="#000" />
+                  <Text style={styles.ctaText}>
+                    {mode === 'merge' ? `Confirm & Merge PR #${prNumber}` : cfg.ctaLabel}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            {mode === 'merge' && (
+              <Pressable
+                style={styles.cancelBtn}
+                onPress={onClose}
+                disabled={loading}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
             )}
-          </Pressable>
+          </View>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -379,5 +411,50 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  safetyGateBox: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  safetyGateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  safetyGateTitle: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    color: '#f59e0b',
+    letterSpacing: 0.8,
+  },
+  safetyGateQuestion: {
+    fontSize: FONT_SIZES.sm + 1,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  safetyGateNote: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+  cancelBtn: {
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
   },
 });

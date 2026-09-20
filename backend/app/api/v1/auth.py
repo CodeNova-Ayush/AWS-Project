@@ -72,7 +72,7 @@ async def auth_session(request: Request, response: Response, db: AsyncIOMotorDat
 
 @router.post("/demo-login")
 async def demo_login(request: Request, response: Response, db: AsyncIOMotorDatabase = Depends(get_db)):
-    """Fast local login connected with user's GitHub account iamksr05."""
+    """Fast local demo login with sample data."""
     user_id = "user_demo_local"
     session_token = f"demo_token_{uuid.uuid4().hex}"
 
@@ -80,10 +80,10 @@ async def demo_login(request: Request, response: Response, db: AsyncIOMotorDatab
         {"user_id": user_id},
         {"$set": {
             "user_id": user_id,
-            "email": "karanram73005@gmail.com",
-            "name": "Karan Ram (iamksr05)",
-            "github_username": "iamksr05",
-            "picture": "https://avatars.githubusercontent.com/iamksr05",
+            "email": "demo@codetok.local",
+            "name": "Demo Developer",
+            "github_username": "demo",
+            "picture": "https://avatars.githubusercontent.com/u/9919?v=4",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,

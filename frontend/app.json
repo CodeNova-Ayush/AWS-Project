@@ -21,7 +21,16 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "name": "CodeTok",
+      "shortName": "CodeTok",
+      "favicon": "./assets/images/favicon.png",
+      "display": "standalone",
+      "themeColor": "#000000",
+      "backgroundColor": "#000000",
+      "meta": {
+        "apple-mobile-web-app-capable": "yes",
+        "apple-mobile-web-app-status-bar-style": "black-translucent"
+      }
     },
     "plugins": [
       "expo-router",
