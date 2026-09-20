@@ -167,7 +167,7 @@ export default function LoginScreen() {
 
           {/* Wordmark */}
           <View style={styles.wordmarkRow}>
-            <Text style={styles.wordmark}>snippets</Text>
+            <Text style={styles.wordmark}>MergeDeck</Text>
             <View style={styles.betaBadge}>
               <Text style={styles.betaText}>beta</Text>
             </View>

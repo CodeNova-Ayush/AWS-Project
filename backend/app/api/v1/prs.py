@@ -62,7 +62,7 @@ async def reject_pr(
     body_data = {}
     if request.headers.get("content-type") == "application/json":
         body_data = await request.json()
-    comment = body_data.get("comment", "Changes requested via CodeTok")
+    comment = body_data.get("comment", "Changes requested via MergeDeck")
     try:
         result = await pr_service.reject_pr(issue_id, token, comment)
         await _invalidate_pr_caches(db, user)
@@ -93,7 +93,7 @@ async def merge_pr(
             issue_id,
             token,
             commit_title=body_data.get("commit_title", ""),
-            commit_message=body_data.get("commit_message", "Merged via CodeTok"),
+            commit_message=body_data.get("commit_message", "Merged via MergeDeck"),
             merge_method=body_data.get("merge_method", "merge"),
         )
         await _invalidate_pr_caches(db, user)

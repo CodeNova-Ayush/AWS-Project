@@ -12,7 +12,7 @@ def _get_headers(token: str = "") -> dict:
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "CodeTok-App",
+        "User-Agent": "MergeDeck-App",
     }
     if token and token.strip():
         headers["Authorization"] = f"Bearer {token.strip()}"

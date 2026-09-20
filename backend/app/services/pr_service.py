@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 import httpx
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -312,10 +312,18 @@ async def fetch_personal_issues(
     return sorted(result, key=lambda x: x.get("created_at", ""), reverse=True)
 
 
-async def fetch_org_issues(db: AsyncIOMotorDatabase, force: bool = False) -> List[dict]:
+async def fetch_org_issues(
+    db: AsyncIOMotorDatabase,
+    force: bool = False,
+    token: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> List[dict]:
     installation_id = settings.github_app_installation_id
     if not installation_id:
-        raise ValueError("GITHUB_APP_INSTALLATION_ID not configured")
+        # Fall back to personal or seeded issues if GitHub App is not configured
+        if token and user_id:
+            return await fetch_personal_issues(db, token=token, user_id=user_id, force=force)
+        return await issue_repo.get_all_issues(db)
 
     async def _fetch():
         token_data = await github_app.get_installation_token(installation_id)
@@ -385,7 +393,7 @@ async def approve_pr(issue_id: str, token: str) -> dict:
         resp = await client.post(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
             headers=_github_headers(token),
-            json={"event": "APPROVE", "body": "Approved via CodeTok"},
+            json={"event": "APPROVE", "body": "Approved via MergeDeck"},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -398,7 +406,7 @@ async def approve_pr(issue_id: str, token: str) -> dict:
 
 
 async def reject_pr(
-    issue_id: str, token: str, comment: str = "Changes requested via CodeTok"
+    issue_id: str, token: str, comment: str = "Changes requested via MergeDeck"
 ) -> dict:
     owner, repo, pr_number = _parse_issue_id(issue_id)
     async with httpx.AsyncClient() as client:
@@ -421,7 +429,7 @@ async def merge_pr(
     issue_id: str,
     token: str,
     commit_title: str = "",
-    commit_message: str = "Merged via CodeTok",
+    commit_message: str = "Merged via MergeDeck",
     merge_method: str = "merge",
 ) -> dict:
     owner, repo, pr_number = _parse_issue_id(issue_id)

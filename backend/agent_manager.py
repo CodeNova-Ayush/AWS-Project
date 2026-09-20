@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import httpx
 
+from typing import Optional, List, Dict, Any
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from app.core.config import settings
 from app.integrations.github_app import get_installation_token
@@ -32,7 +33,7 @@ async def append_trace(db, job_id: str, step: str):
         {"$push": {"traces": trace_entry}}
     )
 
-async def summarize_trajectory(db, job_id: str):
+async def summarize_trajectory(db, job_id: str, user_id: str = ""):
     # Fetch all traces
     traces = await db.agent_traces.find({"job_id": job_id}).sort("timestamp", 1).to_list(1000)
     trace_texts = [f"- {t['step']}" for t in traces]
@@ -77,11 +78,21 @@ Trajectory Logs:
     text_summary = fallback_summary
 
     try:
+        from app.services.key_service import get_provider_config
+        prov_cfg = await get_provider_config(db, user_id) if user_id else {}
+        prov = prov_cfg.get("provider", "openai")
+        model = prov_cfg.get("model", "gpt-4.1")
+        key = prov_cfg.get("api_key") or os.environ.get('OPENAI_API_KEY', '')
+        base_url = prov_cfg.get("base_url")
+
         chat = LlmChat(
-            api_key=os.environ.get('OPENAI_API_KEY', ''),
+            api_key=key,
             session_id=f"summary_{job_id}",
-            system_message=system_msg
-        ).with_model("openai", "gpt-4.1")
+            system_message=system_msg,
+            provider=prov,
+            model=model,
+            base_url=base_url or None,
+        ).with_model(prov, model, base_url=base_url)
 
         response = await chat.send_message(UserMessage(text=prompt))
 
@@ -97,7 +108,6 @@ Trajectory Logs:
         raw_steps = json.loads(cleaned_response.strip())
 
         # Normalize field: backend LLM returns "title", frontend TrajectoryStep expects "text"
-        # Also pass through "phase" for color-coded UI in AgentTrajectory component
         structured_summary = [
             {
                 "text": step.get("title", step.get("text", "")),
@@ -114,7 +124,11 @@ Trajectory Logs:
 
     except Exception as e:
         logger.error(f"Failed to summarize trajectory to JSON: {e}")
-        # structured_summary stays empty; text_summary stays as fallback
+        # Build fallback structured summary from traces
+        structured_summary = [
+            {"text": t.get("step", ""), "phase": "other", "details": []}
+            for t in traces[:10]
+        ]
 
     await db.agent_jobs.update_one(
         {"job_id": job_id},
@@ -125,24 +139,35 @@ Trajectory Logs:
         }}
     )
 
-async def stream_subprocess(db, job_id: str, cmd: str, cwd: str, env: dict = None):
-    await append_trace(db, job_id, f"Running command: {cmd}")
+async def stream_subprocess(db, job_id: str, cmd, cwd: str, env: Optional[dict] = None):
+    cmd_display = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+    await append_trace(db, job_id, f"Running command: {cmd_display}")
     subprocess_env = {**os.environ, **(env or {})}
-    process = await asyncio.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        cwd=cwd,
-        env=subprocess_env,
-    )
+    if isinstance(cmd, list):
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=cwd,
+            env=subprocess_env,
+        )
+    else:
+        process = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=cwd,
+            env=subprocess_env,
+        )
     
-    while True:
-        line = await process.stdout.readline()
-        if not line:
-            break
-        text = line.decode('utf-8', errors='replace').strip()
-        if text:
-            await append_trace(db, job_id, text)
+    if process.stdout is not None:
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+            text = line.decode('utf-8', errors='replace').strip()
+            if text:
+                await append_trace(db, job_id, text)
             
     await process.wait()
     return process.returncode
@@ -197,7 +222,7 @@ Explain the approach taken to fix the problem. Why did you choose this approach?
 Any caveats, follow-up work needed, or things reviewers should pay special attention to.
 """
 
-async def generate_pr_body(job_id: str, issue_id: str, issue: dict | None, traces: list[dict]) -> str:
+async def generate_pr_body(db, job_id: str, issue_id: str, issue: dict | None, traces: list[dict], user_id: str = "") -> str:
     """Use LLM to generate a well-structured PR body from job traces and issue context."""
     trace_lines = "\n".join(f"- {t.get('step', '')}" for t in traces[-60:])  # last 60 to stay within token limits
     issue_title = issue.get("title", "No title") if issue else "No issue title"
@@ -235,27 +260,136 @@ Write a structured PR description following this EXACT format (use Markdown):
 Keep it concise, technical, and developer-focused. Do NOT include any preamble."""
 
     try:
+        from app.services.key_service import get_provider_config
+        prov_cfg = await get_provider_config(db, user_id) if user_id else {}
+        prov = prov_cfg.get("provider", "openai")
+        model = prov_cfg.get("model", "gpt-4.1")
+        key = prov_cfg.get("api_key") or os.environ.get("OPENAI_API_KEY", "")
+        base_url = prov_cfg.get("base_url")
+
         chat = LlmChat(
-            api_key=os.environ.get("OPENAI_API_KEY", ""),
+            api_key=key,
             session_id=f"pr_body_{job_id}",
-            system_message="You are a senior software engineer writing clear, concise GitHub PR descriptions."
-        ).with_model("openai", "gpt-4.1")
+            system_message="You are a senior software engineer writing clear, concise GitHub PR descriptions.",
+            provider=prov,
+            model=model,
+            base_url=base_url or None,
+        ).with_model(prov, model, base_url=base_url)
 
         response = await chat.send_message(UserMessage(text=prompt))
         return response.strip()
     except Exception as e:
         logger.error(f"Failed to generate PR body for job {job_id}: {e}")
-        return f"Automated fix generated by CodeTok agent job `{job_id}`.\n\nCloses `{issue_id}`."
+        return f"Automated fix generated by MergeDeck agent job `{job_id}`.\n\nCloses `{issue_id}`."
+
+
+async def run_autonomous_fix(db, job_id: str, worktree_path: str, issue: dict, prov_cfg: dict) -> bool:
+    """Autonomous agent runner using the user's active BYOK provider (Mistral, Groq, OpenAI, etc.)."""
+    provider = prov_cfg.get("provider", "mistral")
+    model = prov_cfg.get("model", "codestral-latest")
+    api_key = prov_cfg.get("api_key", "")
+    base_url = prov_cfg.get("base_url")
+
+    await append_trace(db, job_id, f"Scanning workspace files for issue: '{issue.get('title')}'...")
+
+    # Discover editable source files (skip node_modules, .git, binary)
+    relevant_files = {}
+    skip_dirs = {".git", "node_modules", "dist", ".next", "__pycache__", ".expo"}
+    valid_exts = {".js", ".jsx", ".ts", ".tsx", ".py", ".html", ".css", ".json", ".md", ".sh"}
+
+    for root, dirs, files in os.walk(worktree_path):
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in valid_exts:
+                rel_path = os.path.relpath(os.path.join(root, f), worktree_path)
+                try:
+                    with open(os.path.join(root, f), "r", encoding="utf-8", errors="ignore") as fp:
+                        content = fp.read()
+                        if len(content) < 50000:
+                            relevant_files[rel_path] = content
+                except Exception:
+                    pass
+
+    await append_trace(db, job_id, f"Inspected {len(relevant_files)} source files in repository.")
+
+    file_catalog = "\n\n".join(
+        f"--- File: {path} ---\n{content[:4000]}" for path, content in list(relevant_files.items())[:12]
+    )
+
+    prompt = f"""You are an autonomous senior developer fixing a bug or implementing a request.
+
+Repository files:
+{file_catalog}
+
+Target Issue:
+Title: {issue.get('title', '')}
+Description: {issue.get('description', '')}
+
+Your task:
+Analyze the code and implement the exact fix or feature requested.
+Output a valid JSON object with the files that need to be created or modified.
+Format:
+{{
+  "thought": "brief explanation of the fix",
+  "files": [
+    {{
+      "path": "path/to/file.ext",
+      "content": "COMPLETE full file content with the fix applied"
+    }}
+  ]
+}}
+Do NOT output anything other than valid JSON."""
+
+    await append_trace(db, job_id, f"Dispatching prompt to AI model ({provider}/{model})...")
+
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=f"agent_fix_{job_id}",
+        system_message="You are an autonomous AI coding agent. Output only valid JSON.",
+        provider=provider,
+        model=model,
+        base_url=base_url or None,
+    ).with_model(provider, model, base_url=base_url)
+
+    response = await chat.send_message(UserMessage(text=prompt))
+    await append_trace(db, job_id, "Received response from AI model. Applying file changes...")
+
+    cleaned = response.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    if cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+
+    data = json.loads(cleaned.strip())
+    thought = data.get("thought", "Fix generated by AI agent.")
+    await append_trace(db, job_id, f"Strategy: {thought}")
+
+    files_modified = 0
+    for f_obj in data.get("files", []):
+        f_path = f_obj.get("path")
+        f_content = f_obj.get("content")
+        if f_path and f_content is not None:
+            full_target = os.path.join(worktree_path, f_path)
+            os.makedirs(os.path.dirname(full_target), exist_ok=True)
+            with open(full_target, "w", encoding="utf-8") as out_fp:
+                out_fp.write(f_content)
+            files_modified += 1
+            await append_trace(db, job_id, f"Updated file: {f_path}")
+
+    return files_modified > 0
 
 
 async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: str, user_id: str = ""):
     """
-    Background worker that runs `codex` or `opencode` in an isolated directory.
+    Background worker that runs `codex`, `opencode`, `claude_code`, or the autonomous BYOK engine in an isolated directory.
     """
     start_time = time.time()
     logger.info(f"Starting actual agent job {job_id} using {agent_type} for {repo}")
     await update_job_status(db, job_id, "Running")
-    worktree_path = f"/tmp/codetok_workspaces/{job_id}"
+    worktree_path = f"/tmp/mergedeck_workspaces/{job_id}"
 
     try:
         if "/" in repo:
@@ -263,13 +397,31 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
         else:
             raise ValueError("Invalid repo format. Must be owner/repo")
 
-        # Get installation token
-        installation_id = settings.github_app_installation_id
-        if not installation_id:
-            raise ValueError("GITHUB_APP_INSTALLATION_ID not configured")
+        # Resolve GitHub Token:
+        # 1. Authenticated user's GitHub OAuth token
+        # 2. Server settings GITHUB_TOKEN (Personal Access Token)
+        # 3. GitHub App installation token (if GITHUB_APP_INSTALLATION_ID is configured)
+        token = ""
+        if user_id:
+            user = await db.users.find_one({"user_id": user_id})
+            if user and user.get("github_access_token"):
+                token = user["github_access_token"]
+                logger.info(f"Using OAuth access token for user {user_id}")
 
-        token_data = await get_installation_token(installation_id)
-        token = token_data["token"]
+        if not token and settings.github_token:
+            token = settings.github_token
+            logger.info("Using settings.github_token")
+
+        if not token and settings.github_app_installation_id:
+            try:
+                token_data = await get_installation_token(settings.github_app_installation_id)
+                token = token_data.get("token", "")
+                logger.info("Using GitHub App installation token")
+            except Exception as e:
+                logger.warning(f"Failed to fetch GitHub App token: {e}")
+
+        if not token:
+            raise ValueError("No GitHub token available. Please sign in with GitHub or configure GITHUB_TOKEN in your environment.")
 
         # Clone repo
         await append_trace(db, job_id, f"Cloning repository {repo} into isolated worktree...")
@@ -285,13 +437,19 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
         if process.returncode != 0:
             raise Exception(f"Git clone failed: {err.decode(errors='replace')}")
 
+        # Configure git committer identity in the worktree
+        await asyncio.create_subprocess_shell(
+            'git config user.name "MergeDeck AI Agent" && git config user.email "agent@mergedeck.app"',
+            cwd=worktree_path,
+        )
+
         # Get default branch name to base PR against
         proc = await asyncio.create_subprocess_shell("git branch --show-current", cwd=worktree_path, stdout=asyncio.subprocess.PIPE)
         out, _ = await proc.communicate()
         base_branch = out.decode().strip() or "main"
 
         # Checkout dynamic branch
-        branch_name = f"codetok/agent-{job_id}"
+        branch_name = f"mergedeck/agent-{job_id}"
         await append_trace(db, job_id, f"Creating and checking out branch {branch_name}...")
         checkout_cmd = f"git checkout -b {branch_name}"
         proc = await asyncio.create_subprocess_shell(checkout_cmd, cwd=worktree_path)
@@ -299,6 +457,29 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
 
         # Fetch issue details for prompt
         issue = await db.issues.find_one({"issue_id": issue_id})
+        if not issue and issue_id.startswith("gh_issue_"):
+            parts = issue_id.split("_")
+            if len(parts) >= 5:
+                gh_owner = parts[2]
+                gh_repo = parts[3]
+                gh_num = parts[4]
+                try:
+                    async with httpx.AsyncClient() as client:
+                        gh_res = await client.get(
+                            f"https://api.github.com/repos/{gh_owner}/{gh_repo}/issues/{gh_num}",
+                            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                            timeout=15.0,
+                        )
+                        if gh_res.status_code == 200:
+                            gh_data = gh_res.json()
+                            issue = {
+                                "title": gh_data.get("title", ""),
+                                "description": gh_data.get("body", "") or "",
+                                "issue_id": issue_id,
+                                "project": repo,
+                            }
+                except Exception as e:
+                    logger.warning(f"Failed to fetch issue from GitHub API fallback: {e}")
 
         FUTILE_GUARD = (
             "\n\nCRITICAL RULE: If the fix or change required is futile, ambiguous, "
@@ -317,81 +498,86 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
 
         # Append code quality and PR format guides so agent knows what standard to follow
         prompt_text += CODE_QUALITY_GUIDE + PR_FORMAT_GUIDE
-
         escaped_prompt = prompt_text.replace('"', '\\"')
         
-        # Fetch per-user API keys early so we can write opencode config before spawning
-        from app.services.key_service import get_user_keys
+        # Fetch per-user API keys
+        from app.services.key_service import get_user_keys, get_provider_config
         user_keys = await get_user_keys(db, user_id) if user_id else {}
+        prov_cfg = await get_provider_config(db, user_id) if user_id else {}
+
         resolved_openai_key = user_keys.get("openai_key") or os.environ.get("OPENAI_API_KEY", "")
         resolved_anthropic_key = user_keys.get("anthropic_key") or os.environ.get("ANTHROPIC_API_KEY", "")
 
-        # Spawn Agent Target
-        if agent_type == "codex":
-            cmd = f'codex exec --full-auto -C {worktree_path} "{escaped_prompt}"'
-        elif agent_type == "opencode":
-            # opencode v1.x does NOT read OPENAI_API_KEY from the subprocess env.
-            # It reads provider credentials from auth.json OR from an opencode.json config
-            # file in the project directory using the {env:VAR} syntax.
-            # We write a per-job opencode.json into the worktree so the API key is always
-            # picked up regardless of what's in the system auth.json.
+        ran_autonomous = False
+
+        if agent_type == "claude_code" and resolved_anthropic_key and shutil.which("claude"):
+            cmd = ["claude", "-p", prompt_text, "--permission-mode", "acceptEdits", "--output-format", "text"]
+        elif agent_type == "opencode" and (resolved_openai_key or prov_cfg.get("api_key")) and shutil.which("opencode"):
+            opencode_key = resolved_openai_key or prov_cfg.get("api_key", "")
             opencode_config = {
                 "model": "openai/gpt-4o",
                 "provider": {
                     "openai": {
                         "options": {
-                            "apiKey": resolved_openai_key
+                            "apiKey": opencode_key
                         }
                     }
                 }
             }
-            import json as _json
             opencode_config_path = os.path.join(worktree_path, "opencode.json")
             with open(opencode_config_path, "w") as f:
-                _json.dump(opencode_config, f)
-            await append_trace(db, job_id, "Written opencode.json config with OpenAI credentials.")
-            cmd = f'opencode run "{escaped_prompt}" --dir {worktree_path} -m openai/gpt-4o'
-        elif agent_type == "claude_code":
-            # -p = non-interactive print mode (BYOK via ANTHROPIC_API_KEY env var)
-            # --dangerously-skip-permissions = needed for fully autonomous headless runs
-            # --output-format text = human-readable traces (stream-json floods logs with raw JSON events)
-            cmd = f'claude -p "{escaped_prompt}" --dangerously-skip-permissions --output-format text'
-        elif agent_type == "kiro":
-            # kiro-cli chat --no-interactive runs the prompt headlessly
-            # --trust-all-tools auto-approves all file/shell tool usage without confirmation prompts
-            # Requires prior one-time auth: kiro-cli login (device-code flow, works on remote VMs)
-            cmd = f'kiro-cli chat --no-interactive --trust-all-tools "{escaped_prompt}"'
-        else:
-            await append_trace(db, job_id, f"Starting agent {agent_type} (might take a few minutes)...")
-            raise ValueError(f"Unknown agent type: {agent_type}")
-            
-        # Build subprocess env with resolved keys (user key takes priority over system env)
-        agent_env = {
-            "OPENAI_API_KEY": resolved_openai_key,
-            "ANTHROPIC_API_KEY": resolved_anthropic_key,
-            # Unset CLAUDECODE so the subprocess doesn't think it's a nested Claude Code
-            # session, which would cause an immediate crash with "Nested sessions share
-            # runtime resources and will crash all active sessions."
-            "CLAUDECODE": "",
-        }
-        try:
-            returncode = await asyncio.wait_for(
-                stream_subprocess(db, job_id, cmd, worktree_path, env=agent_env),
-                timeout=600  # 10 minutes
+                json.dump(opencode_config, f)
+            await append_trace(db, job_id, "Written opencode.json config with credentials.")
+            cmd = ["opencode", "run", prompt_text, "--dir", worktree_path, "-m", "openai/gpt-4o"]
+        elif agent_type == "codex" and shutil.which("codex"):
+            cmd = ["codex", "exec", "--full-auto", "-C", worktree_path, prompt_text]
+        elif agent_type == "kiro" and shutil.which("kiro-cli"):
+            cmd = ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools", prompt_text]
+        elif prov_cfg.get("api_key"):
+            # Autonomous AI Engine using active BYOK provider (Mistral, Groq, OpenAI, etc.)
+            ran_autonomous = True
+            await append_trace(
+                db,
+                job_id,
+                f"Starting MergeDeck Autonomous Engine with {prov_cfg.get('provider', 'AI').upper()} ({prov_cfg.get('model', 'default')})...",
             )
-        except asyncio.TimeoutError:
-            await append_trace(db, job_id, "Agent timed out after 10 minutes.")
-            await update_job_status(db, job_id, "Failed")
-            return
-
-        if returncode != 0:
-            await append_trace(db, job_id, f"Agent subprocess exited with non-zero code: {returncode}")
+            success = await run_autonomous_fix(
+                db,
+                job_id,
+                worktree_path,
+                issue or {"title": "Issue fix", "description": ""},
+                prov_cfg,
+            )
+            if not success:
+                await append_trace(db, job_id, "Autonomous engine made no file modifications.")
         else:
-            await append_trace(db, job_id, "Agent subprocess completed successfully.")
+            raise ValueError(
+                f"Cannot launch agent '{agent_type}': No AI API key configured. Please configure an API key in Profile > BYOK (e.g. Anthropic, Mistral, Groq, or OpenAI)."
+            )
+
+        if not ran_autonomous:
+            agent_env = {
+                "OPENAI_API_KEY": resolved_openai_key or prov_cfg.get("api_key", ""),
+                "ANTHROPIC_API_KEY": resolved_anthropic_key,
+                "CLAUDECODE": "",
+            }
+            try:
+                returncode = await asyncio.wait_for(
+                    stream_subprocess(db, job_id, cmd, worktree_path, env=agent_env),
+                    timeout=600  # 10 minutes
+                )
+            except asyncio.TimeoutError:
+                await append_trace(db, job_id, "Agent timed out after 10 minutes.")
+                await update_job_status(db, job_id, "Failed")
+                return
+
+            if returncode != 0:
+                await append_trace(db, job_id, f"Agent subprocess exited with non-zero code: {returncode}")
+            else:
+                await append_trace(db, job_id, "Agent subprocess completed successfully.")
             
         # Push changes
         await append_trace(db, job_id, "Committing and pushing changes...")
-        # We handle quotes properly by using proper shell logic
         git_cmds = f"git add . && git commit -m \"Agent fixes for {issue_id}\" || echo 'No changes' && git push origin {branch_name}"
         proc = await asyncio.create_subprocess_shell(git_cmds, cwd=worktree_path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         out, err = await proc.communicate()
@@ -419,7 +605,7 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
 
             # Fetch current traces for LLM PR body generation
             current_traces = await db.agent_traces.find({"job_id": job_id}).sort("timestamp", 1).to_list(1000)
-            pr_body = await generate_pr_body(job_id, issue_id, issue, current_traces)
+            pr_body = await generate_pr_body(db, job_id, issue_id, issue, current_traces, user_id=user_id)
 
             try:
                 pr_data = await create_github_pr(owner, repo_name, pr_title, pr_body, branch_name, base_branch, token)
@@ -453,7 +639,7 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
         
         # Summarize
         await append_trace(db, job_id, "Generating trajectory summary...")
-        await summarize_trajectory(db, job_id)
+        await summarize_trajectory(db, job_id, user_id=user_id)
         
     except Exception as e:
         logger.error(f"Agent job {job_id} failed: {e}")

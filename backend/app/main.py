@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CodeTok API", lifespan=lifespan)
+    app = FastAPI(title="MergeDeck API", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -239,7 +239,7 @@ def create_app() -> FastAPI:
         async def root():
             return {
                 "status": "online",
-                "service": "CodeTok Backend API",
+                "service": "MergeDeck Backend API",
                 "version": "1.0.0",
                 "docs_url": "/docs",
                 "endpoints": {

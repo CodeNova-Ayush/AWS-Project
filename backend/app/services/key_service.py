@@ -163,8 +163,8 @@ async def get_provider_config(db, user_id: str, provider: Optional[str] = None) 
 
     target_provider = (provider or doc.get("active_provider") or "").lower().strip()
 
-    # If no target specified or active, select first available configured provider
-    if not target_provider or target_provider not in providers:
+    # If no specific provider was requested and target is not in providers, find first configured
+    if not provider and (not target_provider or target_provider not in providers):
         if "openai_key_enc" in doc or "openai" in providers:
             target_provider = "openai"
         elif "anthropic_key_enc" in doc or "anthropic" in providers:

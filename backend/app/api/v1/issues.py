@@ -94,11 +94,13 @@ async def get_org_issues(
     force: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
+    user = await get_current_user(request, db)
+    token = user.get("github_access_token") if user else None
+    user_id = user.get("user_id") if user else None
     try:
-        return await pr_service.fetch_org_issues(db, force=force)
+        return await pr_service.fetch_org_issues(db, force=force, token=token, user_id=user_id)
     except (httpx.HTTPStatusError, ValueError) as exc:
         logger.warning("GitHub App fetch_org_issues unavailable: %s. Falling back to personal/seeded issues.", exc)
-        user = await get_current_user(request, db)
         if user and user.get("github_access_token"):
             try:
                 personal_issues = await pr_service.fetch_personal_issues(
@@ -152,12 +154,37 @@ async def create_issue(
             body=body.description,
             labels=labels,
         )
-        # Convert GitHub issue format to CodeIssue format if needed, but returning GitHub issue is fine for our UI flow
+        issue_id = f"gh_issue_{owner}_{repo_name}_{issue.get('number')}"
+
+        # Persist issue to database for agent jobs and feed lookup
+        issue_doc = {
+            "issue_id": issue_id,
+            "project": body.repo,
+            "branch": "main",
+            "type": body.type or "bug",
+            "type_label": (body.type or "bug").capitalize(),
+            "title": body.title,
+            "description": body.description or "",
+            "github_issue_number": issue.get("number"),
+            "github_issue_url": issue.get("html_url"),
+            "github_owner": owner,
+            "github_repo": repo_name,
+            "user_id": user["user_id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "diff_lines": [],
+            "trajectory_steps": [],
+        }
+        await db.issues.update_one(
+            {"issue_id": issue_id},
+            {"$set": issue_doc},
+            upsert=True,
+        )
+
         return {
             "success": True,
             "issue_url": issue.get("html_url"),
             "issue_number": issue.get("number"),
-            "issue_id": f"gh_issue_{owner}_{repo_name}_{issue.get('number')}",
+            "issue_id": issue_id,
             "issue": issue,
         }
     except httpx.HTTPStatusError as exc:

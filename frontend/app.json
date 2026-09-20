@@ -21,8 +21,8 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "name": "CodeTok",
-      "shortName": "CodeTok",
+      "name": "MergeDeck",
+      "shortName": "MergeDeck",
       "favicon": "./assets/images/favicon.png",
       "display": "standalone",
       "themeColor": "#000000",

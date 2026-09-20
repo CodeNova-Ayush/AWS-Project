@@ -124,7 +124,7 @@ async def connect_github_token(
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             "https://api.github.com/user",
-            headers={"Authorization": f"Bearer {token}", "User-Agent": "CodeTok"},
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "MergeDeck"},
         )
         if resp.status_code != 200:
             raise HTTPException(status_code=400, detail="Invalid GitHub token")

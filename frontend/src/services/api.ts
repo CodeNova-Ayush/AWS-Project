@@ -209,7 +209,7 @@ export async function rejectPR(issueId: string, comment?: string): Promise<void>
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ comment: comment || 'Changes requested via CodeTok' }),
+    body: JSON.stringify({ comment: comment || 'Changes requested via MergeDeck' }),
   });
   if (!res.ok) throw new Error('Failed to reject PR');
 }
@@ -227,7 +227,7 @@ export async function mergePR(
     body: JSON.stringify({
       merge_method: mergeMethod,
       commit_title: commitTitle || '',
-      commit_message: 'Merged via CodeTok',
+      commit_message: 'Merged via MergeDeck',
     }),
   });
   if (!res.ok) throw new Error('Failed to merge PR');

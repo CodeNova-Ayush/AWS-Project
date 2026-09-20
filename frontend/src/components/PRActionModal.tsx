@@ -95,7 +95,7 @@ export default function PRActionModal({
       if (mode === 'approve') {
         await onApprove();
       } else if (mode === 'reject') {
-        await onReject(rejectComment.trim() || 'Changes requested via CodeTok');
+        await onReject(rejectComment.trim() || 'Changes requested via MergeDeck');
       } else {
         await onMerge(mergeMethod, commitTitle.trim());
       }

@@ -41,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
+    && (npm install -g @anthropic-ai/claude-code || true) \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

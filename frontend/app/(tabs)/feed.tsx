@@ -184,7 +184,7 @@ export default function FeedScreen() {
     if (!currentIssue) return;
     try {
       await Share.share({
-        message: `Check out this code fix on CodeTok: "${currentIssue.title}" in ${currentIssue.project}`,
+        message: `Check out this code fix on MergeDeck: "${currentIssue.title}" in ${currentIssue.project}`,
       });
     } catch {}
   }
