@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, Pressable, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard,
-  Modal, ScrollView,
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  FlatList,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Keyboard,
+  Modal,
+  ScrollView,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
@@ -50,11 +60,13 @@ interface Props {
 }
 
 export default function AIChatSheet({ issueId, issue, visible, onClose }: Props) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [activeProvider, setActiveProvider] = useState<string>('groq');
   const [activeModel, setActiveModel] = useState<string>('llama-3.3-70b-versatile');
   const flatListRef = useRef<FlatList>(null);
@@ -72,9 +84,20 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
       if (status) {
         if (status.active_provider) setActiveProvider(status.active_provider);
         if (status.active_model) setActiveModel(status.active_model);
+
+        const configuredProviders = status.providers
+          ? Object.keys(status.providers).filter(k => status.providers[k])
+          : [];
+        const hasKey =
+          configuredProviders.length > 0 ||
+          Boolean(status.has_openai_key) ||
+          Boolean(status.has_anthropic_key);
+        setHasApiKey(hasKey);
+      } else {
+        setHasApiKey(false);
       }
     } catch {
-      // Keep defaults
+      setHasApiKey(false);
     }
   }
 
@@ -91,6 +114,12 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
   }
 
   async function handleSend(customText?: string) {
+    if (hasApiKey === false) {
+      onClose();
+      router.push('/profile');
+      return;
+    }
+
     const textToSend = (typeof customText === 'string' ? customText : input).trim();
     if (!textToSend || loading) return;
     setInput('');
@@ -119,16 +148,28 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
     };
 
     try {
-      const response = await sendChatMessage(issueId, textToSend, issueContext, activeProvider, activeModel);
+      const response = await sendChatMessage(
+        issueId,
+        textToSend,
+        issueContext,
+        activeProvider,
+        activeModel
+      );
       setMessages(prev => [...prev, response]);
     } catch {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Something went wrong. Please ensure your API key for ' + (activeProvider ? activeProvider.toUpperCase() : 'your selected provider') + ' is saved in Settings > Profile.',
-        timestamp: new Date().toISOString(),
-        provider: activeProvider,
-        model: activeModel,
-      }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content:
+            'Something went wrong. Please ensure your API key for ' +
+            (activeProvider ? activeProvider.toUpperCase() : 'your selected provider') +
+            ' is configured in Profile > BYOK.',
+          timestamp: new Date().toISOString(),
+          provider: activeProvider,
+          model: activeModel,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -157,11 +198,15 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
           <View style={styles.sheetHeader}>
             <View style={styles.headerLeft}>
               <View style={styles.iconRing}>
-                <Ionicons name="chatbubbles" size={16} color={COLORS.primary} />
+                <Ionicons name="chatbubbles" size={16} color={COLORS.primaryLight} />
               </View>
               <View style={styles.headerLabels}>
-                <Text style={styles.sheetTitle} numberOfLines={1}>{issue.title}</Text>
-                <Text style={styles.sheetSubtitle}>{issue.project} · {activeProvider.toUpperCase()} ({activeModel})</Text>
+                <Text style={styles.sheetTitle} numberOfLines={1}>
+                  {issue.title}
+                </Text>
+                <Text style={styles.sheetSubtitle}>
+                  {issue.project} · {activeProvider.toUpperCase()} ({activeModel})
+                </Text>
               </View>
             </View>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn} testID="close-chat">
@@ -169,10 +214,39 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
             </Pressable>
           </View>
 
+          {/* Missing API Key Warning Banner with 1-Tap Redirect */}
+          {hasApiKey === false && (
+            <View style={styles.missingKeyBanner}>
+              <View style={styles.missingKeyLeft}>
+                <View style={styles.missingKeyIconRing}>
+                  <Feather name="key" size={16} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.missingKeyTitle}>No AI Provider Key Configured</Text>
+                  <Text style={styles.missingKeyDesc}>
+                    To chat with this PR, ask questions, or run automated reviews, please add your
+                    API key (Anthropic, OpenAI, Groq, or Mistral) in Profile.
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.addKeyBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => {
+                  onClose();
+                  router.push('/profile');
+                }}
+                testID="redirect-to-add-api-key"
+              >
+                <Feather name="plus-circle" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addKeyBtnText}>Add API Key in Profile →</Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Messages */}
           {loadingHistory ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={COLORS.primary} />
+              <ActivityIndicator color={COLORS.primaryLight} />
             </View>
           ) : (
             <FlatList
@@ -180,13 +254,15 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
               data={messages}
               keyExtractor={(_, i) => String(i)}
               style={styles.messageList}
-              contentContainerStyle={messages.length === 0 ? styles.emptyList : { paddingVertical: SPACING.md }}
+              contentContainerStyle={
+                messages.length === 0 ? styles.emptyList : { paddingVertical: SPACING.md }
+              }
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <View style={styles.emptyHeader}>
                     <View style={styles.emptyIconRing}>
-                      <Ionicons name="sparkles" size={20} color={COLORS.primary} />
+                      <Ionicons name="sparkles" size={20} color={COLORS.primaryLight} />
                     </View>
                     <Text style={styles.emptyTitle}>PR Intelligence & Review</Text>
                     <Text style={styles.emptySubtitle}>
@@ -202,7 +278,7 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                         disabled={loading}
                       >
                         <View style={styles.promptCardHeader}>
-                          <Feather name={action.icon as any} size={13} color={COLORS.primary} />
+                          <Feather name={action.icon as any} size={13} color={COLORS.primaryLight} />
                           <Text style={styles.promptCardTitle}>{action.title}</Text>
                         </View>
                         <Text style={styles.promptCardDesc}>{action.desc}</Text>
@@ -210,8 +286,10 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                     ))}
                   </View>
                   <View style={styles.contextChip}>
-                    <Feather name="zap" size={11} color={COLORS.primary} />
-                    <Text style={styles.contextChipText}>Context loaded · {activeProvider.toUpperCase()}</Text>
+                    <Feather name="zap" size={11} color={COLORS.primaryLight} />
+                    <Text style={styles.contextChipText}>
+                      Context loaded · {activeProvider.toUpperCase()}
+                    </Text>
                   </View>
                 </View>
               }
@@ -225,13 +303,17 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                 >
                   {item.role === 'assistant' && (
                     <View style={styles.aiLabel}>
-                      <Ionicons name="chatbubbles" size={10} color={COLORS.primary} />
+                      <Ionicons name="chatbubbles" size={10} color={COLORS.primaryLight} />
                       <Text style={styles.aiLabelText}>
-                        {item.provider ? `${item.provider.toUpperCase()}${item.model ? ` · ${item.model}` : ''}` : `${activeProvider.toUpperCase()} · ${activeModel}`}
+                        {(item.provider || activeProvider).toUpperCase()}
                       </Text>
                     </View>
                   )}
-                  <MarkdownMessage content={item.content} isUser={item.role === 'user'} />
+                  {item.role === 'assistant' ? (
+                    <MarkdownMessage content={item.content} />
+                  ) : (
+                    <Text style={[styles.messageText, styles.userText]}>{item.content}</Text>
+                  )}
                 </View>
               )}
             />
@@ -240,14 +322,20 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
           {/* Typing indicator */}
           {loading && (
             <View style={styles.typingIndicator}>
-              <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.typingText}>{activeProvider.toUpperCase()} is analyzing PR…</Text>
+              <ActivityIndicator size="small" color={COLORS.primaryLight} />
+              <Text style={styles.typingText}>
+                {activeProvider.toUpperCase()} analyzing diff & generating review…
+              </Text>
             </View>
           )}
 
-          {/* Quick prompt chips bar */}
+          {/* Quick-action chips scroll */}
           <View style={styles.quickChipsContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickChipsScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickChipsScroll}
+            >
               {QUICK_ACTIONS.map(action => (
                 <Pressable
                   key={action.label}
@@ -255,33 +343,53 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                   onPress={() => handleSend(action.query)}
                   disabled={loading}
                 >
-                  <Feather name={action.icon as any} size={11} color={COLORS.primary} />
+                  <Feather name={action.icon as any} size={12} color={COLORS.primaryLight} />
                   <Text style={styles.quickChipText}>{action.label}</Text>
                 </Pressable>
               ))}
             </ScrollView>
           </View>
 
-          {/* Input row — sits above the safe area */}
+          {/* Input row */}
           <View style={[styles.inputRow, { paddingBottom: insets.bottom + SPACING.md }]}>
             <TextInput
-              style={styles.input}
-              placeholder="Ask about this code, bugs, conflicts…"
+              style={[styles.input, hasApiKey === false && styles.inputDisabled]}
+              placeholder={
+                hasApiKey === false
+                  ? 'Configure API key in Profile to enable chat...'
+                  : 'Ask about this code, bugs, conflicts…'
+              }
               placeholderTextColor={COLORS.textTertiary}
               value={input}
               onChangeText={setInput}
               onSubmitEditing={() => handleSend()}
               returnKeyType="send"
-              editable={!loading}
+              editable={hasApiKey !== false && !loading}
               testID="chat-input"
             />
             <Pressable
-              onPress={() => handleSend()}
-              style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-              disabled={!input.trim() || loading}
+              onPress={() =>
+                hasApiKey === false ? (onClose(), router.push('/profile')) : handleSend()
+              }
+              style={[
+                styles.sendBtn,
+                hasApiKey === false
+                  ? styles.sendBtnRedirect
+                  : (!input.trim() || loading) && styles.sendBtnDisabled,
+              ]}
               testID="chat-send-btn"
             >
-              <Feather name="send" size={16} color={input.trim() ? COLORS.primaryFg : COLORS.textTertiary} />
+              <Feather
+                name={hasApiKey === false ? 'key' : 'send'}
+                size={16}
+                color={
+                  hasApiKey === false
+                    ? '#FFFFFF'
+                    : input.trim()
+                    ? COLORS.primaryFg
+                    : COLORS.textTertiary
+                }
+              />
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -294,25 +402,25 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F121A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '78%',
-    minHeight: 360,
+    maxHeight: '82%',
+    minHeight: 380,
     borderTopWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     ...SHADOWS.lg,
   },
   handle: {
     width: 38,
     height: 4,
-    backgroundColor: '#E4E4E7',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: SPACING.sm,
@@ -326,7 +434,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     gap: SPACING.sm,
   },
   headerLeft: {
@@ -339,9 +447,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#FAF8F5',
+    backgroundColor: 'rgba(99, 102, 241, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -350,24 +458,76 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   sheetTitle: {
-    color: COLORS.textPrimary,
+    color: '#F8FAFC',
     fontSize: FONT_SIZES.sm,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   sheetSubtitle: {
-    color: COLORS.textSecondary,
+    color: '#94A3B8',
     fontSize: FONT_SIZES.xs,
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FAF8F5',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+
+  // ── Missing Key Banner ──
+  missingKeyBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.28)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+    gap: 10,
+  },
+  missingKeyLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  missingKeyIconRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  missingKeyTitle: {
+    color: '#F59E0B',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  missingKeyDesc: {
+    color: '#94A3B8',
+    fontSize: FONT_SIZES.xs,
+    lineHeight: 16,
+  },
+  addKeyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4F46E5',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  addKeyBtnText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
   },
 
   // ── Loading / Empty ──
@@ -389,11 +549,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
   },
-  emptyText: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '500',
-  },
   contextChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -401,12 +556,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: `${COLORS.primary}12`,
+    backgroundColor: 'rgba(99, 102, 241, 0.14)',
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   contextChipText: {
-    color: COLORS.primary,
+    color: '#818CF8',
     fontSize: FONT_SIZES.xs,
     fontWeight: '600',
   },
@@ -419,18 +574,18 @@ const styles = StyleSheet.create({
     maxWidth: '92%',
   },
   userBubble: {
-    backgroundColor: '#18181B',
+    backgroundColor: '#4F46E5',
     alignSelf: 'flex-end',
     borderBottomRightRadius: BORDER_RADIUS.sm,
     maxWidth: '85%',
     ...SHADOWS.sm,
   },
   aiBubble: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#171B26',
     alignSelf: 'flex-start',
     borderBottomLeftRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     width: '100%',
     maxWidth: '94%',
     ...SHADOWS.sm,
@@ -442,7 +597,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   aiLabelText: {
-    color: '#4F46E5',
+    color: '#818CF8',
     fontSize: 10,
     fontWeight: '700',
   },
@@ -451,7 +606,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   userText: { color: '#FFFFFF' },
-  aiText: { color: '#18181B' },
 
   // ── Typing + Input ──
   typingIndicator: {
@@ -462,14 +616,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
   },
   typingText: {
-    color: COLORS.textTertiary,
+    color: '#94A3B8',
     fontSize: FONT_SIZES.xs,
   },
   quickChipsContainer: {
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
-    backgroundColor: '#FAF8F5',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#0F121A',
   },
   quickChipsScroll: {
     paddingHorizontal: SPACING.lg,
@@ -479,16 +633,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#171B26',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    ...SHADOWS.sm,
   },
   quickChipText: {
-    color: COLORS.textPrimary,
+    color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -500,22 +653,22 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#FAF8F5',
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(99, 102, 241, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
   emptyTitle: {
-    color: COLORS.textPrimary,
+    color: '#F8FAFC',
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     marginBottom: 4,
     letterSpacing: -0.2,
   },
   emptySubtitle: {
-    color: COLORS.textSecondary,
+    color: '#94A3B8',
     fontSize: FONT_SIZES.xs,
     textAlign: 'center',
   },
@@ -528,9 +681,9 @@ const styles = StyleSheet.create({
   },
   promptCard: {
     width: '48%',
-    backgroundColor: '#FAF8F5',
+    backgroundColor: '#171B26',
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 14,
     padding: 12,
   },
@@ -541,12 +694,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   promptCardTitle: {
-    color: COLORS.textPrimary,
+    color: '#F8FAFC',
     fontSize: 12,
     fontWeight: '700',
   },
   promptCardDesc: {
-    color: COLORS.textSecondary,
+    color: '#94A3B8',
     fontSize: 10,
     lineHeight: 14,
   },
@@ -557,29 +710,35 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
     gap: SPACING.sm,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F121A',
   },
   input: {
     flex: 1,
-    backgroundColor: '#FAF8F5',
+    backgroundColor: '#05070A',
     borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    color: COLORS.textPrimary,
+    color: '#F8FAFC',
     fontSize: FONT_SIZES.sm,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  inputDisabled: {
+    opacity: 0.5,
   },
   sendBtn: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#18181B',
+    backgroundColor: '#4F46E5',
     justifyContent: 'center',
     alignItems: 'center',
     ...SHADOWS.sm,
   },
   sendBtnDisabled: {
-    backgroundColor: '#F4F2EC',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sendBtnRedirect: {
+    backgroundColor: '#F59E0B',
   },
 });
