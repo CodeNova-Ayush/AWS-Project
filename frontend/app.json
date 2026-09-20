@@ -21,12 +21,12 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "name": "MergeDeck",
+      "name": "MergeDeck — Reel-based Code Reviews",
       "shortName": "MergeDeck",
       "favicon": "./assets/images/favicon.png",
       "display": "standalone",
-      "themeColor": "#000000",
-      "backgroundColor": "#000000",
+      "themeColor": "#050505",
+      "backgroundColor": "#050505",
       "meta": {
         "apple-mobile-web-app-capable": "yes",
         "apple-mobile-web-app-status-bar-style": "black-translucent"

@@ -220,6 +220,42 @@ def create_app() -> FastAPI:
         assets_dir = frontend_dist / "assets"
         if assets_dir.exists():
             app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets_static")
+        icons_dir = frontend_dist / "icons"
+        if icons_dir.exists():
+            app.mount("/icons", StaticFiles(directory=str(icons_dir)), name="icons_static")
+
+        # PWA-specific endpoints with mandatory caching and scoping headers
+        @app.get("/sw.js")
+        async def serve_service_worker():
+            sw_file = frontend_dist / "sw.js"
+            if sw_file.is_file():
+                return FileResponse(
+                    sw_file,
+                    media_type="application/javascript",
+                    headers={
+                        "Service-Worker-Allowed": "/",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                    },
+                )
+            return {"error": "Service worker not found"}
+
+        @app.get("/manifest.json")
+        async def serve_manifest():
+            manifest_file = frontend_dist / "manifest.json"
+            if manifest_file.is_file():
+                return FileResponse(
+                    manifest_file,
+                    media_type="application/manifest+json",
+                    headers={"Cache-Control": "public, max-age=3600"},
+                )
+            return {"error": "Manifest not found"}
+
+        @app.get("/offline.html")
+        async def serve_offline():
+            offline_file = frontend_dist / "offline.html"
+            if offline_file.is_file():
+                return FileResponse(offline_file, media_type="text/html")
+            return {"error": "Offline page not found"}
 
         @app.get("/{full_path:path}")
         async def serve_spa_app(full_path: str):
