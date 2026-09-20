@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 
 interface Props {
   isSaved: boolean;
@@ -32,126 +32,164 @@ export default function ActionSidebar({
   isPR,
   onApprovePR,
   onRejectPR,
-  onMergePR
+  onMergePR,
 }: Props) {
   return (
     <View style={styles.container} testID="action-sidebar">
-      <ChatButton onPress={onChat} />
-      <ActionButton
+      {/* Discuss / AI Chat */}
+      <SidebarButton
+        testID="action-chat"
+        iconElement={<Ionicons name="chatbubble-ellipses-outline" size={19} color={COLORS.textPrimary} />}
+        label="Chat"
+        onPress={onChat}
+      />
+
+      {/* Save */}
+      <SidebarButton
         testID="action-save"
-        icon="bookmark"
+        iconElement={
+          <Feather
+            name="bookmark"
+            size={18}
+            color={isSaved ? COLORS.primaryLight : COLORS.textSecondary}
+          />
+        }
         label={isSaved ? 'Saved' : 'Save'}
-        color={isSaved ? COLORS.primary : COLORS.textPrimary}
-        filled={isSaved}
+        isActive={isSaved}
+        activeColor={COLORS.primaryLight}
         onPress={onSave}
       />
-      {!isPR && (
-        <ActionButton
-          testID="action-apply"
-          icon="play"
-          label={isApplied ? 'Applied' : 'Apply'}
-          color={isApplied ? COLORS.success : COLORS.primary}
-          onPress={onApply}
-        />
-      )}
-      {!isPR && onAssignAgent && (
-        <ActionButton
-          testID="action-assign"
-          icon="cpu"
-          label="Assign"
-          color={COLORS.primary}
-          onPress={onAssignAgent}
-        />
-      )}
-      {isPR && isAgentPR && onViewAgentTrace && (
-        <ActionButton
-          testID="action-view-trace"
-          icon="activity"
-          label="Trace"
-          color={COLORS.secondary}
-          onPress={onViewAgentTrace}
-        />
-      )}
+
+      {/* Approve PR */}
       {isPR && onApprovePR && (
-        <ActionButton
+        <SidebarButton
           testID="action-approve-pr"
-          icon="check"
+          iconElement={<Feather name="check-circle" size={18} color={COLORS.success} />}
           label="Approve"
-          color={COLORS.success}
+          badgeColor="rgba(16, 185, 129, 0.15)"
+          borderColor="rgba(16, 185, 129, 0.3)"
+          textColor={COLORS.success}
           onPress={onApprovePR}
         />
       )}
+
+      {/* Reject PR */}
       {isPR && onRejectPR && (
-        <ActionButton
+        <SidebarButton
           testID="action-reject-pr"
-          icon="x"
+          iconElement={<Feather name="x-circle" size={18} color={COLORS.error} />}
           label="Reject"
-          color={COLORS.error}
+          badgeColor="rgba(244, 63, 94, 0.15)"
+          borderColor="rgba(244, 63, 94, 0.3)"
+          textColor={COLORS.error}
           onPress={onRejectPR}
         />
       )}
+
+      {/* Merge PR */}
       {isPR && onMergePR && (
-        <ActionButton
+        <SidebarButton
           testID="action-merge-pr"
-          icon="git-merge"
+          iconElement={<Feather name="git-merge" size={18} color={COLORS.primaryLight} />}
           label="Merge"
-          color={COLORS.primary}
+          badgeColor="rgba(99, 102, 241, 0.18)"
+          borderColor="rgba(99, 102, 241, 0.35)"
+          textColor={COLORS.primaryLight}
           onPress={onMergePR}
         />
       )}
-      <ActionButton
+
+      {/* Apply (non-PR) */}
+      {!isPR && (
+        <SidebarButton
+          testID="action-apply"
+          iconElement={<Feather name="play" size={18} color={isApplied ? COLORS.success : COLORS.primaryLight} />}
+          label={isApplied ? 'Applied' : 'Apply'}
+          onPress={onApply}
+        />
+      )}
+
+      {/* Assign Agent */}
+      {!isPR && onAssignAgent && (
+        <SidebarButton
+          testID="action-assign"
+          iconElement={<Feather name="cpu" size={18} color={COLORS.textSecondary} />}
+          label="Agent"
+          onPress={onAssignAgent}
+        />
+      )}
+
+      {/* View Trace */}
+      {isPR && isAgentPR && onViewAgentTrace && (
+        <SidebarButton
+          testID="action-view-trace"
+          iconElement={<Feather name="activity" size={18} color={COLORS.secondary} />}
+          label="Trace"
+          onPress={onViewAgentTrace}
+        />
+      )}
+
+      {/* Share */}
+      <SidebarButton
         testID="action-share"
-        icon="send"
+        iconElement={<Feather name="share-2" size={17} color={COLORS.textSecondary} />}
         label="Share"
-        color={COLORS.textPrimary}
         onPress={onShare}
       />
     </View>
   );
 }
 
-/** Dedicated chat button with the dual-bubble discussion icon */
-function ChatButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      testID="action-chat"
-      onPress={onPress}
-      style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-      hitSlop={8}
-    >
-      <Ionicons
-        name="chatbubbles"
-        size={30}
-        color={COLORS.textPrimary}
-        style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}
-      />
-      <Text style={[styles.label, { color: COLORS.textPrimary, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }]}>
-        Discuss
-      </Text>
-    </Pressable>
-  );
-}
-
-function ActionButton({
-  testID, icon, label, color, bgColor, filled, onPress,
+function SidebarButton({
+  testID,
+  iconElement,
+  label,
+  onPress,
+  isActive,
+  activeColor,
+  badgeColor,
+  borderColor,
+  textColor,
 }: {
   testID: string;
-  icon: keyof typeof Feather.glyphMap;
+  iconElement: React.ReactNode;
   label: string;
-  color: string;
-  bgColor?: string;
-  filled?: boolean;
   onPress: () => void;
+  isActive?: boolean;
+  activeColor?: string;
+  badgeColor?: string;
+  borderColor?: string;
+  textColor?: string;
 }) {
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => [styles.btn, pressed && styles.btnPressed, bgColor ? { backgroundColor: bgColor } : null]}
-      hitSlop={8}
+      style={({ pressed }) => [
+        styles.btnContainer,
+        pressed && styles.btnPressed,
+      ]}
+      hitSlop={6}
     >
-      <Feather name={icon} size={28} color={color} style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} />
-      <Text style={[styles.label, { color, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }]}>{label}</Text>
+      <View
+        style={[
+          styles.iconCircle,
+          badgeColor ? { backgroundColor: badgeColor } : null,
+          borderColor ? { borderColor } : null,
+          isActive ? styles.iconCircleActive : null,
+        ]}
+      >
+        {iconElement}
+      </View>
+      <Text
+        style={[
+          styles.label,
+          textColor ? { color: textColor } : null,
+          isActive && activeColor ? { color: activeColor } : null,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -160,27 +198,46 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 12,
-    bottom: 120,
+    bottom: 96,
     alignItems: 'center',
-    gap: SPACING.lg,
-    zIndex: 10,
+    gap: 12,
+    zIndex: 15,
   },
-  btn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
+  btnContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   btnPressed: {
-    opacity: 0.7,
+    opacity: 0.75,
     transform: [{ scale: 0.92 }],
   },
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(17, 20, 30, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    // @ts-ignore
+    backdropFilter: 'blur(16px)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  iconCircleActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
+  },
   label: {
-    fontSize: FONT_SIZES.xs - 2,
-    marginTop: 2,
-    fontWeight: '600',
+    fontSize: 10,
+    marginTop: 3,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
     textAlign: 'center',
   },
 });
