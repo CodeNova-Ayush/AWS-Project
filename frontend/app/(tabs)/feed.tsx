@@ -189,21 +189,27 @@ export default function FeedScreen() {
     } catch {}
   }
 
-  function handleChat() {
-    if (!currentIssue) return;
+  function handleChat(targetIssue?: CodeIssue) {
+    const issueToUse = targetIssue || currentIssue;
+    if (!issueToUse) return;
     if (!user) {
       Alert.alert('Sign in required', 'Please sign in to chat with AI.');
       return;
     }
+    const idx = issues.findIndex((i) => i.issue_id === issueToUse.issue_id);
+    if (idx !== -1) setCurrentIndex(idx);
     setChatVisible(true);
   }
 
-  function handleAssignAgent() {
-    if (!currentIssue) return;
+  function handleAssignAgent(targetIssue?: CodeIssue) {
+    const issueToUse = targetIssue || currentIssue;
+    if (!issueToUse) return;
     if (!user) {
       Alert.alert('Sign in required', 'Please sign in to assign background agents.');
       return;
     }
+    const idx = issues.findIndex((i) => i.issue_id === issueToUse.issue_id);
+    if (idx !== -1) setCurrentIndex(idx);
     setAssignAgentVisible(true);
   }
 
@@ -328,6 +334,8 @@ export default function FeedScreen() {
             issue={item}
             onOpenCI={handleOpenCI}
             onOpenFullDiff={handleOpenFullDiff}
+            onAssignAgent={() => handleAssignAgent(item)}
+            onChat={() => handleChat(item)}
           />
         )}
         pagingEnabled
@@ -567,25 +575,27 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 50,
-    backgroundColor: 'rgba(5, 5, 8, 0.82)',
+    backgroundColor: 'rgba(9, 10, 15, 0.82)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    // @ts-ignore
+    backdropFilter: 'blur(20px)',
   },
   compactHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
-    gap: 8,
+    paddingVertical: 8,
+    gap: 10,
   },
   scopeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: BORDER_RADIUS.full,
     padding: 2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   scopeBtn: {
     paddingHorizontal: 10,
@@ -593,39 +603,41 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.full,
   },
   scopeBtnActive: {
-    backgroundColor: 'rgba(208, 253, 62, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   scopeText: {
     color: COLORS.textTertiary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   scopeTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontWeight: '600',
   },
   typeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 4,
   },
   typeBtn: {
     paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingVertical: 4,
+    position: 'relative',
   },
   typeBtnActive: {
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
+    borderBottomColor: COLORS.primaryLight,
   },
   typeBtnText: {
     color: COLORS.textTertiary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   typeBtnTextActive: {
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   actionGroup: {
     flexDirection: 'row',
@@ -636,48 +648,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(208, 253, 62, 0.1)',
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(208, 253, 62, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.28)',
   },
   compactCreateText: {
-    color: COLORS.primary,
+    color: COLORS.primaryLight,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   compactReloadBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   emptyContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
-    paddingBottom: 100, // accommodate bottom nav
-    gap: SPACING.lg,
+    paddingBottom: 100,
+    gap: SPACING.md,
   },
   emptyTitle: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: '800',
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
     color: COLORS.textPrimary,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.3,
   },
   emptyDesc: {
-    fontSize: FONT_SIZES.md,
+    fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    fontWeight: '500',
+    lineHeight: 20,
+    maxWidth: 280,
   }
 });
