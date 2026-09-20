@@ -151,12 +151,12 @@ export function getCardAIRisk(issue: CodeIssue): { level: 'LOW' | 'MEDIUM' | 'HI
   if (issue.ai_risk) {
     switch (issue.ai_risk) {
       case 'HIGH':
-        return { level: 'HIGH', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' };
+        return { level: 'HIGH', color: '#FB7185', bg: 'rgba(244, 63, 94, 0.12)' };
       case 'MEDIUM':
-        return { level: 'MEDIUM', color: '#eab308', bg: 'rgba(234, 179, 8, 0.15)' };
+        return { level: 'MEDIUM', color: '#FBBF24', bg: 'rgba(245, 158, 11, 0.12)' };
       case 'LOW':
       default:
-        return { level: 'LOW', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' };
+        return { level: 'LOW', color: '#34D399', bg: 'rgba(16, 185, 129, 0.12)' };
     }
   }
 
@@ -171,12 +171,12 @@ export function getCardAIRisk(issue: CodeIssue): { level: 'LOW' | 'MEDIUM' | 'HI
   );
 
   if (isSensitive || total > 250) {
-    return { level: 'HIGH', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' };
+    return { level: 'HIGH', color: '#FB7185', bg: 'rgba(244, 63, 94, 0.12)' };
   }
   if (total > 50 || issue.type === 'bug') {
-    return { level: 'MEDIUM', color: '#eab308', bg: 'rgba(234, 179, 8, 0.15)' };
+    return { level: 'MEDIUM', color: '#FBBF24', bg: 'rgba(245, 158, 11, 0.12)' };
   }
-  return { level: 'LOW', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' };
+  return { level: 'LOW', color: '#34D399', bg: 'rgba(16, 185, 129, 0.12)' };
 }
 
 /**
