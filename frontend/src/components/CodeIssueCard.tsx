@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   Pressable,
   Image,
   Platform,
+  Linking,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { CodeIssue } from '../constants/types';
 import DiffViewer from './DiffViewer';
 import AgentTrajectory from './AgentTrajectory';
+import MarkdownSpecs from './MarkdownSpecs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getCardCIInfo,
@@ -31,15 +33,55 @@ interface Props {
   issue: CodeIssue;
   onOpenCI?: (ciInfo: CIInfo, repo: string, branch: string) => void;
   onOpenFullDiff?: (files: ParsedDiffFile[], metrics: DiffMetrics, prTitle: string) => void;
+  onAssignAgent?: () => void;
+  onChat?: () => void;
+}
+
+function getCleanMarkdownPreview(md?: string): string {
+  if (!md || !md.trim()) return 'No specifications provided.';
+  return md
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`{3}[\s\S]*?`{3}/g, '[code snippet]')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/\n+/g, ' ')
+    .trim();
 }
 
 export default function CodeIssueCard({
   issue,
   onOpenCI,
   onOpenFullDiff,
+  onAssignAgent,
+  onChat,
 }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const horizontalScrollRef = useRef<ScrollView>(null);
+
+  const isPR =
+    issue.issue_id.startsWith('gh_pr_') ||
+    (!issue.issue_id.startsWith('gh_issue_') &&
+      ((issue.diff_lines && issue.diff_lines.length > 0) ||
+        Boolean(issue.github_pr_number && !issue.github_issue_number)));
+
+  const issueNumber =
+    issue.github_issue_number ||
+    issue.github_pr_number ||
+    (issue.issue_id.includes('_') ? issue.issue_id.split('_').pop() : null);
+
+  const issueType = issue.type || 'bug';
+  const typeLabel =
+    issue.type_label ||
+    (issueType === 'bug'
+      ? 'Bug Fix'
+      : issueType === 'performance'
+      ? 'Performance'
+      : 'Feature');
 
   const ciInfo = getCardCIInfo(issue);
   const author = getCardAuthorInfo(issue);
@@ -63,7 +105,30 @@ export default function CodeIssueCard({
       ? `${issue.github_owner}/${issue.github_repo}`
       : issue.project || 'CodeNova-Ayush/demo';
 
-  const branchName = issue.branch || 'Features/nothing';
+  const branchName = issue.branch || 'main';
+
+  const formattedDate = issue.created_at
+    ? (() => {
+        try {
+          const d = new Date(issue.created_at);
+          return isNaN(d.getTime())
+            ? 'Recently'
+            : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch {
+          return 'Recently';
+        }
+      })()
+    : 'Recently';
+
+  const githubUrl = issue.github_pr_url || issue.github_issue_url;
+
+  function goToDetails() {
+    horizontalScrollRef.current?.scrollTo({ x: width, animated: true });
+  }
+
+  function goToFeed() {
+    horizontalScrollRef.current?.scrollTo({ x: 0, animated: true });
+  }
 
   function handleCIPress() {
     if (onOpenCI) {
@@ -77,215 +142,705 @@ export default function CodeIssueCard({
     }
   }
 
+  function handleOpenGitHub() {
+    if (githubUrl) {
+      Linking.openURL(githubUrl).catch(() => {});
+    }
+  }
+
   return (
     <View style={[styles.container, { height }]} testID={`issue-card-${issue.issue_id}`}>
       <ScrollView
+        ref={horizontalScrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         bounces={false}
         style={{ flex: 1 }}
       >
-        {/* Page 1: Main Reel Card (Matches exact requested ASCII layout) */}
+        {/* ==================================================================== */}
+        {/* Page 1: Main Reel Card */}
+        {/* ==================================================================== */}
         <View style={[{ width, height }, styles.frontPage]}>
           <View
             style={[
               styles.frontPageInner,
               {
-                paddingTop: insets.top + 60,
-                paddingBottom: Math.max(insets.bottom + 70, 85),
+                paddingTop: insets.top + 64,
+                paddingBottom: Math.max(insets.bottom + 65, 80),
               },
             ]}
           >
-            {/* 1. CI Status & Diff Scope Pill */}
-            <View style={styles.topMetaRow}>
-              <Pressable
-                onPress={handleCIPress}
-                style={[
-                  styles.ciPill,
-                  {
-                    borderColor:
-                      ciInfo.status === 'passed'
-                        ? 'rgba(34, 197, 94, 0.35)'
-                        : 'rgba(239, 68, 68, 0.35)',
-                    backgroundColor:
-                      ciInfo.status === 'passed'
-                        ? 'rgba(34, 197, 94, 0.12)'
-                        : 'rgba(239, 68, 68, 0.12)',
-                  },
-                ]}
-                hitSlop={6}
-              >
-                <View
-                  style={[
-                    styles.ciIndicatorDot,
-                    {
-                      backgroundColor:
-                        ciInfo.status === 'passed' ? COLORS.success : COLORS.error,
-                    },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.ciText,
-                    {
-                      color:
-                        ciInfo.status === 'passed' ? COLORS.success : COLORS.error,
-                    },
-                  ]}
-                >
-                  {ciInfo.label}
-                </Text>
-              </Pressable>
-
-              <Text style={styles.metaBullet}>•</Text>
-
-              {/* Diff Scope Pill */}
-              <View style={styles.diffScopePill}>
-                <Text style={styles.diffScopeText}>{diffMetrics.summaryText}</Text>
-              </View>
-            </View>
-
-            {/* 2. Repository Identifier */}
-            <Text style={styles.repoText} numberOfLines={1}>
-              {repoName}
-            </Text>
-
-            {/* 3. Branch Name & Author with Avatar */}
-            <View style={styles.branchAuthorBlock}>
-              <Text style={styles.branchText} numberOfLines={1}>
-                {branchName}
-              </Text>
-              <View style={styles.authorRow}>
-                {author.avatarUrl ? (
-                  <Image source={{ uri: author.avatarUrl }} style={styles.authorAvatar} />
-                ) : (
-                  <View style={styles.authorAvatarPlaceholder}>
-                    <Text style={styles.authorInitials}>
-                      {author.handle.replace('@', '').slice(0, 2).toUpperCase()}
+            {isPR ? (
+              /* PR Reel View */
+              <>
+                {/* 1. CI Status & Diff Scope Pill */}
+                <View style={styles.topMetaRow}>
+                  <Pressable
+                    onPress={handleCIPress}
+                    style={[
+                      styles.ciPill,
+                      {
+                        borderColor:
+                          ciInfo.status === 'passed'
+                            ? 'rgba(16, 185, 129, 0.28)'
+                            : 'rgba(244, 63, 94, 0.28)',
+                        backgroundColor:
+                          ciInfo.status === 'passed'
+                            ? 'rgba(16, 185, 129, 0.1)'
+                            : 'rgba(244, 63, 94, 0.1)',
+                      },
+                    ]}
+                    hitSlop={6}
+                  >
+                    <View
+                      style={[
+                        styles.ciIndicatorDot,
+                        {
+                          backgroundColor:
+                            ciInfo.status === 'passed' ? COLORS.success : COLORS.error,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.ciText,
+                        {
+                          color:
+                            ciInfo.status === 'passed' ? '#34D399' : '#FB7185',
+                        },
+                      ]}
+                    >
+                      {ciInfo.label}
                     </Text>
+                  </Pressable>
+
+                  <Text style={styles.metaBullet}>•</Text>
+
+                  {/* Diff Scope Pill */}
+                  <View style={styles.diffScopePill}>
+                    <Text style={styles.diffScopeText}>{diffMetrics.summaryText}</Text>
                   </View>
-                )}
-                <Text style={styles.authorHandle}>
-                  by <Text style={styles.authorHandleHighlight}>{author.handle}</Text> •{' '}
-                  {author.timeFormatted}
-                </Text>
-              </View>
-            </View>
-
-            {/* 4. AI Risk Pill */}
-            <View style={styles.riskRow}>
-              <View
-                style={[
-                  styles.riskPill,
-                  { backgroundColor: aiRisk.bg, borderColor: `${aiRisk.color}55` },
-                ]}
-              >
-                <Feather name="shield" size={13} color={aiRisk.color} />
-                <Text style={[styles.riskText, { color: aiRisk.color }]}>
-                  Risk: {aiRisk.level}
-                </Text>
-              </View>
-            </View>
-
-            {/* 5. AI Summary Section */}
-            <View style={styles.aiSummaryContainer}>
-              <View style={styles.aiSummaryHeader}>
-                <Text style={styles.aiBrainIcon}>🧠</Text>
-                <Text style={styles.aiSummaryTitle}>AI Summary:</Text>
-              </View>
-              {aiBullets.map((bullet, idx) => (
-                <View key={idx} style={styles.bulletItem}>
-                  <Text style={styles.bulletSymbol}>•</Text>
-                  <Text style={styles.bulletText}>{bullet}</Text>
                 </View>
-              ))}
-            </View>
 
-            {/* Spacer to align code snippet box cleanly with action buttons */}
-            <View style={{ flex: 1, minHeight: 12 }} />
+                {/* 2. Repository Identifier */}
+                <View style={styles.repoRow}>
+                  <Feather name="folder" size={12} color={COLORS.textTertiary} />
+                  <Text style={styles.repoText} numberOfLines={1}>
+                    {repoName}
+                  </Text>
+                </View>
 
-            {/* 6. Tap-to-Expand Code Snippet Box */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.codeSnippetBox,
-                pressed && styles.codeSnippetBoxPressed,
-              ]}
-              onPress={handleDiffBoxPress}
-              testID="diff-preview-box"
-            >
-              {/* File header bar */}
-              <View style={styles.snippetHeader}>
-                <Feather name="file-text" size={12} color="#86efac" />
-                <Text style={styles.snippetFilename} numberOfLines={1}>
-                  {primaryFile.filename}
-                </Text>
-                <Feather name="maximize-2" size={12} color={COLORS.textTertiary} />
-              </View>
-
-              {/* Code lines */}
-              <View style={styles.snippetContent}>
-                {previewSnippetLines.map((line, idx) => (
-                  <View key={idx} style={styles.snippetLineRow}>
-                    <Text
-                      style={[
-                        styles.snippetPrefix,
-                        line.type === 'add' && { color: COLORS.success },
-                        line.type === 'del' && { color: COLORS.error },
-                      ]}
-                    >
-                      {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.snippetCodeText,
-                        line.type === 'add' && { color: '#86efac' },
-                        line.type === 'del' && { color: '#fca5a5' },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {line.content}
+                {/* 3. Branch Name & Author with Avatar */}
+                <View style={styles.branchAuthorBlock}>
+                  <Text style={styles.branchText} numberOfLines={2}>
+                    {issue.title || branchName}
+                  </Text>
+                  <View style={styles.authorRow}>
+                    {author.avatarUrl ? (
+                      <Image source={{ uri: author.avatarUrl }} style={styles.authorAvatar} />
+                    ) : (
+                      <View style={styles.authorAvatarPlaceholder}>
+                        <Text style={styles.authorInitials}>
+                          {author.handle.replace('@', '').slice(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.authorHandle}>
+                      by <Text style={styles.authorHandleHighlight}>{author.handle}</Text> •{' '}
+                      {author.timeFormatted}
                     </Text>
                   </View>
-                ))}
-              </View>
+                </View>
 
-              {/* Tap to expand prompt */}
-              <View style={styles.snippetFooter}>
-                <Text style={styles.snippetFooterText}>(Tap to view full diff)</Text>
-              </View>
-            </Pressable>
+                {/* 4. AI Risk Pill */}
+                <View style={styles.riskRow}>
+                  <View
+                    style={[
+                      styles.riskPill,
+                      {
+                        backgroundColor:
+                          aiRisk.level === 'LOW'
+                            ? 'rgba(16, 185, 129, 0.1)'
+                            : aiRisk.level === 'HIGH'
+                            ? 'rgba(244, 63, 94, 0.1)'
+                            : 'rgba(245, 158, 11, 0.1)',
+                        borderColor:
+                          aiRisk.level === 'LOW'
+                            ? 'rgba(16, 185, 129, 0.25)'
+                            : aiRisk.level === 'HIGH'
+                            ? 'rgba(244, 63, 94, 0.25)'
+                            : 'rgba(245, 158, 11, 0.25)',
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name="shield"
+                      size={12}
+                      color={
+                        aiRisk.level === 'LOW'
+                          ? '#34D399'
+                          : aiRisk.level === 'HIGH'
+                          ? '#FB7185'
+                          : '#FBBF24'
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.riskText,
+                        {
+                          color:
+                            aiRisk.level === 'LOW'
+                              ? '#34D399'
+                              : aiRisk.level === 'HIGH'
+                              ? '#FB7185'
+                              : '#FBBF24',
+                        },
+                      ]}
+                    >
+                      {aiRisk.level} RISK
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 5. AI Summary Section */}
+                <View style={styles.aiSummaryContainer}>
+                  <View style={styles.aiSummaryHeader}>
+                    <Feather name="cpu" size={13} color={COLORS.primaryLight} />
+                    <Text style={styles.aiSummaryTitle}>AI SUMMARY</Text>
+                  </View>
+                  {aiBullets.map((bullet, idx) => (
+                    <View key={idx} style={styles.bulletItem}>
+                      <View style={styles.bulletDot} />
+                      <Text style={styles.bulletText}>{bullet}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Spacer */}
+                <View style={{ flex: 1, minHeight: 8 }} />
+
+                {/* 6. Tap-to-Expand Code Snippet Box */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.codeSnippetBox,
+                    pressed && styles.codeSnippetBoxPressed,
+                  ]}
+                  onPress={handleDiffBoxPress}
+                  testID="diff-preview-box"
+                >
+                  <View style={styles.snippetHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Feather name="file-text" size={13} color={COLORS.primaryLight} />
+                      <Text style={styles.snippetFilename} numberOfLines={1}>
+                        {primaryFile.filename}
+                      </Text>
+                    </View>
+                    <Feather name="maximize-2" size={12} color={COLORS.textTertiary} />
+                  </View>
+
+                  <View style={styles.snippetContent}>
+                    {previewSnippetLines.map((line, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.snippetLineRow,
+                          line.type === 'add' && styles.lineRowAdd,
+                          line.type === 'del' && styles.lineRowDel,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.snippetPrefix,
+                            line.type === 'add' && { color: '#34D399' },
+                            line.type === 'del' && { color: '#FB7185' },
+                          ]}
+                        >
+                          {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.snippetCodeText,
+                            line.type === 'add' && { color: '#86EFAC' },
+                            line.type === 'del' && { color: '#FCA5A5' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {line.content}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.snippetFooter}>
+                    <Text style={styles.snippetFooterText}>Tap to view full diff</Text>
+                    <Feather name="arrow-right" size={11} color={COLORS.primaryLight} />
+                  </View>
+                </Pressable>
+              </>
+            ) : (
+              /* Issue Reel View */
+              <>
+                {/* 1. Issue Status & Branch Tag Row */}
+                <View style={styles.topMetaRow}>
+                  <View style={styles.issueStatusPill}>
+                    <View style={styles.issueStatusDot} />
+                    <Text style={styles.issueStatusText}>
+                      Open Issue {issueNumber ? `#${issueNumber}` : ''}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.metaBullet}>•</Text>
+
+                  <View style={styles.issueTypePill}>
+                    <Feather
+                      name={issueType === 'bug' ? 'alert-circle' : issueType === 'performance' ? 'zap' : 'compass'}
+                      size={11}
+                      color={issueType === 'bug' ? '#FB7185' : '#818CF8'}
+                    />
+                    <Text
+                      style={[
+                        styles.issueTypeText,
+                        { color: issueType === 'bug' ? '#FB7185' : '#818CF8' },
+                      ]}
+                    >
+                      {typeLabel}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.metaBullet}>•</Text>
+
+                  <View style={styles.branchPill}>
+                    <Feather name="git-branch" size={11} color={COLORS.textTertiary} />
+                    <Text style={styles.branchPillText}>{branchName}</Text>
+                  </View>
+                </View>
+
+                {/* 2. Repository Identifier */}
+                <View style={styles.repoRow}>
+                  <Feather name="folder" size={12} color={COLORS.textTertiary} />
+                  <Text style={styles.repoText} numberOfLines={1}>
+                    {repoName}
+                  </Text>
+                </View>
+
+                {/* 3. Title & Author with Avatar */}
+                <View style={styles.branchAuthorBlock}>
+                  <Text style={styles.branchText} numberOfLines={2}>
+                    {issue.title}
+                  </Text>
+                  <View style={styles.authorRow}>
+                    {author.avatarUrl ? (
+                      <Image source={{ uri: author.avatarUrl }} style={styles.authorAvatar} />
+                    ) : (
+                      <View style={styles.authorAvatarPlaceholder}>
+                        <Text style={styles.authorInitials}>
+                          {author.handle.replace('@', '').slice(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.authorHandle}>
+                      by <Text style={styles.authorHandleHighlight}>{author.handle}</Text> •{' '}
+                      {author.timeFormatted}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 4. Priority / Readiness Badge */}
+                <View style={styles.riskRow}>
+                  <View style={styles.issueReadinessPill}>
+                    <Feather name="zap" size={11} color="#34D399" />
+                    <Text style={styles.issueReadinessText}>AI SOLVER READY</Text>
+                  </View>
+                </View>
+
+                {/* 5. AI Resolution Strategy Container */}
+                <View style={styles.aiSummaryContainer}>
+                  <View style={styles.aiSummaryHeader}>
+                    <Feather name="cpu" size={13} color={COLORS.primaryLight} />
+                    <Text style={styles.aiSummaryTitle}>AI RESOLUTION STRATEGY</Text>
+                  </View>
+                  <View style={styles.bulletItem}>
+                    <View style={styles.bulletDot} />
+                    <Text style={styles.bulletText}>
+                      Locate root cause in{' '}
+                      <Text
+                        style={{
+                          color: '#F1F5F9',
+                          fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                        }}
+                      >
+                        {branchName}
+                      </Text>{' '}
+                      for "{issue.title}"
+                    </Text>
+                  </View>
+                  <View style={styles.bulletItem}>
+                    <View style={styles.bulletDot} />
+                    <Text style={styles.bulletText}>
+                      Synthesize zero-shot patch and execute validation checks
+                    </Text>
+                  </View>
+                  <View style={styles.bulletItem}>
+                    <View style={styles.bulletDot} />
+                    <Text style={styles.bulletText}>
+                      Create verified pull request and link issue specs
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Spacer */}
+                <View style={{ flex: 1, minHeight: 8 }} />
+
+                {/* 6. Tap-to-Inspect Issue & Dispatch Box */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.issueDispatchBox,
+                    pressed && styles.codeSnippetBoxPressed,
+                  ]}
+                  onPress={goToDetails}
+                  testID="issue-preview-box"
+                >
+                  <View style={styles.snippetHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Feather name="align-left" size={13} color={COLORS.primaryLight} />
+                      <Text style={styles.snippetFilename} numberOfLines={1}>
+                        Issue Specifications
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 11, color: COLORS.textTertiary }}>Details</Text>
+                      <Feather name="chevron-right" size={12} color={COLORS.textTertiary} />
+                    </View>
+                  </View>
+
+                  <Text style={styles.issueDescriptionPreview} numberOfLines={2}>
+                    {getCleanMarkdownPreview(issue.description)}
+                  </Text>
+
+                  <View style={styles.issueDispatchFooter}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Feather name="zap" size={12} color={COLORS.primaryLight} />
+                      <Text style={styles.snippetFooterText}>Swipe or tap for full specs & AI solver</Text>
+                    </View>
+                    <Feather name="arrow-right" size={11} color={COLORS.primaryLight} />
+                  </View>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
 
+        {/* ==================================================================== */}
         {/* Page 2: Detailed expanded view on horizontal swipe */}
+        {/* ==================================================================== */}
         <View style={[{ width, height }, styles.detailedPage]}>
           <ScrollView
             style={styles.scrollContent}
             contentContainerStyle={[
               styles.scrollInner,
-              { paddingTop: insets.top + 70, paddingBottom: 100 },
+              { paddingTop: insets.top + 64, paddingBottom: 110 },
             ]}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
           >
-            <View style={styles.detailsHeader}>
-              <Text style={styles.detailsHeaderRepo}>{repoName}</Text>
-              <Text style={styles.detailsHeaderBranch}>{branchName}</Text>
+            {/* Top Back Nav Row */}
+            <View style={styles.detailsNavRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.detailsBackBtn,
+                  pressed && styles.detailsBackBtnPressed,
+                ]}
+                onPress={goToFeed}
+                hitSlop={8}
+              >
+                <Feather name="arrow-left" size={14} color="#CBD5E1" />
+                <Text style={styles.detailsBackText}>Feed</Text>
+              </Pressable>
+
+              <View style={styles.detailsPill}>
+                <Text style={styles.detailsPillText}>
+                  {isPR ? 'PR Specs' : 'Issue Specs'}
+                </Text>
+              </View>
             </View>
 
-            <Text style={styles.detailsTitle}>{issue.title}</Text>
-            <Text style={styles.detailsDesc}>{issue.description}</Text>
+            {/* Badges Header Row */}
+            <View style={styles.detailsMetaRow}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  isPR
+                    ? { backgroundColor: 'rgba(129, 140, 248, 0.12)', borderColor: 'rgba(129, 140, 248, 0.25)' }
+                    : { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.25)' },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusBadgeDot,
+                    { backgroundColor: isPR ? '#818CF8' : '#34D399' },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.statusBadgeText,
+                    { color: isPR ? '#818CF8' : '#34D399' },
+                  ]}
+                >
+                  {isPR
+                    ? 'Open Pull Request'
+                    : `Open Issue ${issueNumber ? `#${issueNumber}` : ''}`}
+                </Text>
+              </View>
 
+              <View style={styles.detailsTypeBadge}>
+                <Feather
+                  name={issueType === 'bug' ? 'alert-circle' : issueType === 'performance' ? 'zap' : 'tag'}
+                  size={11}
+                  color={issueType === 'bug' ? '#FB7185' : '#818CF8'}
+                />
+                <Text
+                  style={[
+                    styles.detailsTypeText,
+                    { color: issueType === 'bug' ? '#FB7185' : '#818CF8' },
+                  ]}
+                >
+                  {typeLabel}
+                </Text>
+              </View>
+
+              <View style={styles.detailsBranchBadge}>
+                <Feather name="git-branch" size={11} color={COLORS.textTertiary} />
+                <Text style={styles.detailsBranchText}>{branchName}</Text>
+              </View>
+            </View>
+
+            {/* Repo Identifier */}
+            <View style={styles.detailsRepoRow}>
+              <Feather name="folder" size={13} color={COLORS.textTertiary} />
+              <Text style={styles.detailsRepoText}>{repoName}</Text>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.detailsTitle}>{issue.title}</Text>
+
+            {/* Author & Timestamp */}
+            <View style={styles.detailsAuthorRow}>
+              {author.avatarUrl ? (
+                <Image source={{ uri: author.avatarUrl }} style={styles.detailsAuthorAvatar} />
+              ) : (
+                <View style={styles.authorAvatarPlaceholder}>
+                  <Text style={styles.authorInitials}>
+                    {author.handle.replace('@', '').slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.detailsAuthorText}>
+                Opened by <Text style={styles.authorHandleHighlight}>{author.handle}</Text> •{' '}
+                {formattedDate}
+              </Text>
+            </View>
+
+            {/* Description Card (Markdown Parsed with Special Bold & Code Blocks) */}
+            <View style={styles.detailsDescCard}>
+              <View style={styles.detailsDescHeader}>
+                <Feather name="file-text" size={13} color={COLORS.primaryLight} />
+                <Text style={styles.detailsDescHeaderTitle}>
+                  {isPR ? 'PR SPECIFICATIONS & CONTEXT' : 'ISSUE SPECIFICATIONS'}
+                </Text>
+              </View>
+
+              {/* Rich Markdown Specs Renderer */}
+              <MarkdownSpecs content={issue.description || 'No specifications provided.'} />
+
+              {/* GitHub Labels if present */}
+              {issue.github_labels && issue.github_labels.length > 0 && (
+                <View style={styles.detailsLabelsContainer}>
+                  {issue.github_labels.map((lbl, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.githubLabelBadge,
+                        {
+                          backgroundColor: `#${lbl.color}20`,
+                          borderColor: `#${lbl.color}50`,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.githubLabelText, { color: `#${lbl.color}` }]}>
+                        {lbl.name}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Autonomous Agent Solver Card (When issue has no diff lines yet) */}
+            {(!issue.diff_lines || issue.diff_lines.length === 0) && (
+              <View style={styles.agentSolverCard}>
+                <View style={styles.agentSolverHeader}>
+                  <View style={styles.agentBadge}>
+                    <Feather name="cpu" size={13} color="#818CF8" />
+                    <Text style={styles.agentBadgeText}>AUTONOMOUS AGENT SOLVER</Text>
+                  </View>
+                  <View style={styles.agentReadyPill}>
+                    <View style={styles.pulseDot} />
+                    <Text style={styles.agentReadyText}>Ready to Run</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.agentSolverHeadline}>
+                  Dispatch an AI engineer to clone <Text style={styles.monoHighlight}>{branchName}</Text>, diagnose root cause, and open a pull request.
+                </Text>
+
+                <View style={styles.agentFeatureList}>
+                  <View style={styles.agentFeatureItem}>
+                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Text style={styles.agentFeatureText}>
+                      Isolated container sandbox with auto-branching
+                    </Text>
+                  </View>
+                  <View style={styles.agentFeatureItem}>
+                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Text style={styles.agentFeatureText}>
+                      Zero-shot bug resolution & AST syntax verification
+                    </Text>
+                  </View>
+                  <View style={styles.agentFeatureItem}>
+                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Text style={styles.agentFeatureText}>
+                      Automated CI regression tests & clean PR submission
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Primary Action Buttons */}
+                <View style={styles.agentSolverButtons}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.dispatchButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={onAssignAgent}
+                    testID="assign-agent-button"
+                  >
+                    <Feather name="zap" size={15} color="#FFFFFF" />
+                    <Text style={styles.dispatchButtonText}>Assign AI Agent to Solve</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.chatDiscussButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={onChat}
+                    testID="chat-agent-button"
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="#CBD5E1" />
+                    <Text style={styles.chatDiscussButtonText}>Discuss with AI Assistant</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
+            {/* Diff Viewer (if PR or diff lines exist) */}
             {issue.diff_lines && issue.diff_lines.length > 0 && (
               <View style={styles.diffSection}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="code" size={13} color={COLORS.primaryLight} />
+                  <Text style={styles.sectionHeaderTitle}>PROPOSED CHANGES</Text>
+                </View>
                 <DiffViewer lines={issue.diff_lines} language={issue.language} />
               </View>
             )}
 
+            {/* Trajectory Steps (if available) */}
             {issue.trajectory_steps && issue.trajectory_steps.length > 0 && (
-              <AgentTrajectory steps={issue.trajectory_steps} />
+              <View style={styles.trajectorySection}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="activity" size={13} color={COLORS.primaryLight} />
+                  <Text style={styles.sectionHeaderTitle}>AGENT EXECUTION TRACE</Text>
+                </View>
+                <AgentTrajectory steps={issue.trajectory_steps} />
+              </View>
             )}
+
+            {/* Workflow & History Card */}
+            <View style={styles.workflowCard}>
+              <View style={styles.workflowHeader}>
+                <Feather name="clock" size={12} color={COLORS.textTertiary} />
+                <Text style={styles.workflowTitle}>ISSUE WORKFLOW LIFECYCLE</Text>
+              </View>
+
+              <View style={styles.workflowStep}>
+                <View style={[styles.stepDot, styles.stepDotDone]} />
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>Issue Created</Text>
+                  <Text style={styles.stepSub}>
+                    Filed by {author.handle} • {formattedDate}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.stepLine} />
+
+              <View style={styles.workflowStep}>
+                <View style={[styles.stepDot, styles.stepDotActive]} />
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>AI Autonomous Resolution</Text>
+                  <Text style={styles.stepSub}>
+                    {issue.diff_lines && issue.diff_lines.length > 0
+                      ? 'Patch generated • Awaiting review'
+                      : 'Ready to dispatch autonomous solver'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.stepLine} />
+
+              <View style={styles.workflowStep}>
+                <View
+                  style={[
+                    styles.stepDot,
+                    issue.diff_lines && issue.diff_lines.length > 0 ? styles.stepDotActive : {},
+                  ]}
+                />
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>Pull Request & CI Verification</Text>
+                  <Text style={styles.stepSub}>
+                    {isPR ? 'CI suite verified' : 'Pending agent completion'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* GitHub External Link Button */}
+            {githubUrl ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.githubExternalBtn,
+                  pressed && styles.githubExternalBtnPressed,
+                ]}
+                onPress={handleOpenGitHub}
+              >
+                <Feather name="github" size={14} color="#CBD5E1" />
+                <Text style={styles.githubExternalText}>View on GitHub</Text>
+                <Feather name="external-link" size={12} color={COLORS.textTertiary} />
+              </Pressable>
+            ) : null}
+
+            {/* Return to feed button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.returnToFeedBtn,
+                pressed && styles.returnToFeedBtnPressed,
+              ]}
+              onPress={goToFeed}
+            >
+              <Feather name="arrow-left" size={13} color={COLORS.primaryLight} />
+              <Text style={styles.returnToFeedText}>Return to Feed Reel</Text>
+            </Pressable>
           </ScrollView>
         </View>
       </ScrollView>
@@ -305,129 +860,208 @@ const styles = StyleSheet.create({
   frontPageInner: {
     flex: 1,
     paddingHorizontal: SPACING.lg,
-    paddingRight: 76, // Generous spacing so ActionSidebar never overlaps text/diff
+    paddingRight: 74, // Generous spacing so ActionSidebar never overlaps text/diff
   },
   topMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: 8,
     flexWrap: 'wrap',
   },
   ciPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
+    gap: 5,
   },
   ciIndicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   ciText: {
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  issueStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.28)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    gap: 5,
+  },
+  issueStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  issueStatusText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  issueTypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  issueTypeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  branchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  branchPillText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '600',
   },
   metaBullet: {
     color: COLORS.textTertiary,
     fontSize: 12,
   },
   diffScopePill: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   diffScopeText: {
-    color: '#cbd5e1',
+    color: '#94A3B8',
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
   },
+  repoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
   repoText: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 10,
     letterSpacing: 0.2,
   },
   branchAuthorBlock: {
-    marginBottom: 14,
+    marginBottom: 10,
   },
   branchText: {
-    color: '#ffffff',
-    fontSize: FONT_SIZES.md,
+    color: '#F8FAFC',
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '700',
-    marginBottom: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 5,
+    letterSpacing: -0.2,
   },
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
   },
   authorAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   authorAvatarPlaceholder: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(208, 253, 62, 0.2)',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(208, 253, 62, 0.4)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
   },
   authorInitials: {
-    color: COLORS.primary,
+    color: COLORS.primaryLight,
     fontSize: 9,
     fontWeight: '700',
   },
   authorHandle: {
     color: COLORS.textTertiary,
-    fontSize: 12,
+    fontSize: 11,
   },
   authorHandleHighlight: {
-    color: '#e2e8f0',
+    color: '#CBD5E1',
     fontWeight: '600',
   },
   riskRow: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   riskPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
+    gap: 5,
   },
   riskText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  issueReadinessPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    gap: 5,
+  },
+  issueReadinessText: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   aiSummaryContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(17, 20, 30, 0.72)',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     padding: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   aiSummaryHeader: {
     flexDirection: 'row',
@@ -435,14 +1069,11 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 6,
   },
-  aiBrainIcon: {
-    fontSize: 14,
-  },
   aiSummaryTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.6,
   },
   bulletItem: {
     flexDirection: 'row',
@@ -450,44 +1081,45 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 3,
   },
-  bulletSymbol: {
-    color: COLORS.primary,
-    fontSize: 12,
-    lineHeight: 18,
+  bulletDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.primaryLight,
+    marginTop: 7,
   },
   bulletText: {
-    color: '#cbd5e1',
+    color: '#CBD5E1',
     fontSize: 12,
     lineHeight: 18,
     flex: 1,
   },
   codeSnippetBox: {
-    backgroundColor: '#0a1017',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0C0E17',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
     padding: 10,
     overflow: 'hidden',
   },
   codeSnippetBoxPressed: {
-    borderColor: COLORS.primary,
-    backgroundColor: '#0d1520',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
+    backgroundColor: '#101320',
   },
   snippetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     paddingBottom: 6,
     marginBottom: 6,
   },
   snippetFilename: {
-    color: '#86efac',
+    color: '#F1F5F9',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    flex: 1,
   },
   snippetContent: {
     gap: 2,
@@ -496,29 +1128,64 @@ const styles = StyleSheet.create({
   snippetLineRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 1,
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+  lineRowAdd: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+  },
+  lineRowDel: {
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
   },
   snippetPrefix: {
     width: 14,
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255, 255, 255, 0.3)',
   },
   snippetCodeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#e2e8f0',
+    color: '#CBD5E1',
+    flex: 1,
   },
   snippetFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
     paddingTop: 6,
-    alignItems: 'center',
   },
   snippetFooterText: {
-    color: COLORS.primary,
+    color: COLORS.primaryLight,
     fontSize: 11,
     fontWeight: '600',
+  },
+  issueDispatchBox: {
+    backgroundColor: '#0C0E17',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    padding: 10,
+    overflow: 'hidden',
+  },
+  issueDescriptionPreview: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  issueDispatchFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    paddingTop: 6,
   },
   detailedPage: {
     backgroundColor: COLORS.background,
@@ -528,35 +1195,400 @@ const styles = StyleSheet.create({
   },
   scrollInner: {
     paddingHorizontal: SPACING.lg,
-    paddingRight: 76,
+    paddingRight: 74,
   },
-  detailsHeader: {
+  detailsNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  detailsBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  detailsBackBtnPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  detailsBackText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#CBD5E1',
+  },
+  detailsPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  detailsPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primaryLight,
+    letterSpacing: 0.3,
+  },
+  detailsMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
     marginBottom: 10,
   },
-  detailsHeaderRepo: {
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  detailsTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  detailsTypeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  detailsBranchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  detailsBranchText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '600',
+  },
+  detailsRepoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  detailsRepoText: {
     color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
-  detailsHeaderBranch: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
   detailsTitle: {
-    color: COLORS.textPrimary,
-    fontSize: FONT_SIZES.lg,
+    color: '#FFFFFF',
+    fontSize: 18,
     fontWeight: '800',
+    lineHeight: 24,
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
-  detailsDesc: {
+  detailsAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 14,
+  },
+  detailsAuthorAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  detailsAuthorText: {
+    color: COLORS.textTertiary,
+    fontSize: 12,
+  },
+  detailsDescCard: {
+    backgroundColor: '#0D0F18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 14,
+    marginBottom: 14,
+  },
+  detailsDescHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  detailsDescHeaderTitle: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  detailsLabelsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  githubLabelBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  githubLabelText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  agentSolverCard: {
+    backgroundColor: 'rgba(15, 18, 28, 0.85)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    padding: 14,
+    marginBottom: 14,
+  },
+  agentSolverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  agentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  agentBadgeText: {
+    color: '#818CF8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  agentReadyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  agentReadyText: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  agentSolverHeadline: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  monoHighlight: {
+    color: '#F1F5F9',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+  },
+  agentFeatureList: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  agentFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  agentFeatureText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    flex: 1,
+  },
+  agentSolverButtons: {
+    gap: 8,
+  },
+  dispatchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  dispatchButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  chatDiscussButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  chatDiscussButtonText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.99 }],
   },
   diffSection: {
-    marginBottom: 20,
+    marginBottom: 14,
+  },
+  trajectorySection: {
+    marginBottom: 14,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  sectionHeaderTitle: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  workflowCard: {
+    backgroundColor: '#0C0E17',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 12,
+    marginBottom: 14,
+  },
+  workflowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 10,
+  },
+  workflowTitle: {
+    color: COLORS.textTertiary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  workflowStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    marginTop: 4,
+  },
+  stepDotDone: {
+    backgroundColor: '#10B981',
+  },
+  stepDotActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  stepLine: {
+    width: 1,
+    height: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginLeft: 3.5,
+    marginVertical: 2,
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  stepSub: {
+    color: COLORS.textTertiary,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  githubExternalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  githubExternalBtnPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  githubExternalText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  returnToFeedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  returnToFeedBtnPressed: {
+    opacity: 0.7,
+  },
+  returnToFeedText: {
+    color: COLORS.primaryLight,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
