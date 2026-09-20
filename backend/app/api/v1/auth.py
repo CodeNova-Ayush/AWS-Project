@@ -171,7 +171,10 @@ async def auth_logout(request: Request, response: Response, db: AsyncIOMotorData
 @router.get("/github/login")
 async def github_login(platform: str = Query(default="web")):
     """Return the GitHub OAuth authorisation URL."""
-    if not settings.github_oauth_client_id or not settings.github_redirect_uri:
+    client_id = (settings.github_oauth_client_id or "").strip()
+    is_placeholder = not client_id or client_id.startswith("your_") or "placeholder" in client_id.lower()
+    redirect_uri = (settings.github_redirect_uri or "").strip()
+    if is_placeholder or not redirect_uri:
         return {
             "configured": False,
             "oauth_url": None,
@@ -180,8 +183,8 @@ async def github_login(platform: str = Query(default="web")):
     scope = "repo user"
     oauth_url = (
         "https://github.com/login/oauth/authorize"
-        f"?client_id={quote(settings.github_oauth_client_id, safe='')}"
-        f"&redirect_uri={quote(settings.github_redirect_uri, safe='')}"
+        f"?client_id={quote(client_id, safe='')}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
         f"&scope={quote(scope, safe='')}"
         f"&state={quote(platform, safe='')}"
     )
