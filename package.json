@@ -1,0 +1,10 @@
+{
+  "name": "aws-project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "start": "npm --prefix frontend start",
+    "web": "npm --prefix frontend run web"
+  }
+}
