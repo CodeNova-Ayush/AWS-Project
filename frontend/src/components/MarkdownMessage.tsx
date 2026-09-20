@@ -1,6 +1,7 @@
-import React from 'react';
-import { StyleSheet, Platform } from 'react-native';
-import Markdown from 'react-native-markdown-display';
+import React, { useState } from 'react';
+import { StyleSheet, Platform, View, Text, ScrollView, Pressable } from 'react-native';
+import Markdown, { RenderRules } from 'react-native-markdown-display';
+import { Feather } from '@expo/vector-icons';
 import { COLORS, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 
 interface Props {
@@ -8,37 +9,99 @@ interface Props {
   isUser?: boolean;
 }
 
+function MessageCodeBlock({ content, language }: { content: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  let cleanContent = content || '';
+  if (cleanContent.endsWith('\n')) {
+    cleanContent = cleanContent.slice(0, -1);
+  }
+
+  function handleCopy() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(cleanContent);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {}
+  }
+
+  const langLabel = (language || 'code').trim().toUpperCase();
+
+  return (
+    <View style={blockStyles.codeBlockBox}>
+      <View style={blockStyles.codeBlockHeader}>
+        <View style={blockStyles.codeBlockLangBadge}>
+          <Feather name="terminal" size={11} color="#818CF8" />
+          <Text style={blockStyles.codeBlockLangText}>{langLabel}</Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            blockStyles.codeCopyBtn,
+            pressed && blockStyles.codeCopyBtnPressed,
+          ]}
+          onPress={handleCopy}
+          hitSlop={8}
+        >
+          <Feather
+            name={copied ? 'check' : 'copy'}
+            size={11}
+            color={copied ? '#34D399' : '#94A3B8'}
+          />
+          <Text style={[blockStyles.codeCopyText, copied && { color: '#34D399' }]}>
+            {copied ? 'Copied' : 'Copy'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        style={blockStyles.codeScrollView}
+        contentContainerStyle={blockStyles.codeScrollInner}
+      >
+        <Text style={blockStyles.codeText} selectable>
+          {cleanContent}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function MarkdownMessage({ content, isUser = false }: Props) {
   const markdownStyles = StyleSheet.create({
     body: {
-      color: isUser ? COLORS.primaryFg : COLORS.textPrimary,
+      color: isUser ? COLORS.primaryFg : '#E2E8F0',
       fontSize: FONT_SIZES.sm,
       lineHeight: 22,
     },
     heading1: {
-      color: isUser ? COLORS.primaryFg : COLORS.textPrimary,
-      fontSize: 18,
+      color: isUser ? COLORS.primaryFg : '#FFFFFF',
+      fontSize: 17,
       fontWeight: '800',
       marginTop: 10,
       marginBottom: 6,
     },
     heading2: {
-      color: isUser ? COLORS.primaryFg : COLORS.textPrimary,
-      fontSize: 16,
+      color: isUser ? COLORS.primaryFg : '#F1F5F9',
+      fontSize: 15,
       fontWeight: '700',
       marginTop: 8,
       marginBottom: 4,
     },
     heading3: {
-      color: isUser ? COLORS.primaryFg : COLORS.primary,
-      fontSize: 14,
+      color: isUser ? COLORS.primaryFg : '#818CF8',
+      fontSize: 13,
       fontWeight: '700',
       marginTop: 6,
       marginBottom: 4,
     },
     heading4: {
-      color: isUser ? COLORS.primaryFg : COLORS.textPrimary,
-      fontSize: 13,
+      color: isUser ? COLORS.primaryFg : '#E2E8F0',
+      fontSize: 12,
       fontWeight: '700',
       marginTop: 6,
       marginBottom: 2,
@@ -51,45 +114,24 @@ export default function MarkdownMessage({ content, isUser = false }: Props) {
       marginBottom: 2,
     },
     strong: {
-      fontWeight: '700',
-      color: isUser ? COLORS.primaryFg : COLORS.textPrimary,
+      fontWeight: Platform.OS === 'ios' ? '800' : '700',
+      color: isUser ? COLORS.primaryFg : '#FFFFFF',
     },
     em: {
       fontStyle: 'italic',
+      color: isUser ? 'rgba(255,255,255,0.9)' : '#CBD5E1',
     },
     code_inline: {
-      backgroundColor: isUser ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.08)',
-      color: isUser ? COLORS.primaryFg : COLORS.primary,
-      borderRadius: 4,
+      backgroundColor: isUser ? 'rgba(0,0,0,0.25)' : 'rgba(99, 102, 241, 0.12)',
+      color: isUser ? COLORS.primaryFg : '#A5B4FC',
+      borderRadius: 5,
       borderWidth: 1,
-      borderColor: isUser ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.12)',
-      paddingHorizontal: 5,
-      paddingVertical: 1,
+      borderColor: isUser ? 'rgba(0,0,0,0.35)' : 'rgba(99, 102, 241, 0.28)',
+      paddingHorizontal: 6,
+      paddingVertical: 1.5,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontSize: 12,
       fontWeight: '600',
-    },
-    code_block: {
-      backgroundColor: '#0F1117',
-      borderColor: 'rgba(255,255,255,0.1)',
-      borderWidth: 1,
-      borderRadius: BORDER_RADIUS.sm,
-      padding: 10,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 11,
-      color: '#E2E8F0',
-      marginVertical: 6,
-    },
-    fence: {
-      backgroundColor: '#0F1117',
-      borderColor: 'rgba(255,255,255,0.1)',
-      borderWidth: 1,
-      borderRadius: BORDER_RADIUS.sm,
-      padding: 10,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 11,
-      color: '#E2E8F0',
-      marginVertical: 6,
     },
     bullet_list: {
       marginVertical: 4,
@@ -103,12 +145,12 @@ export default function MarkdownMessage({ content, isUser = false }: Props) {
       marginVertical: 2,
     },
     bullet_list_icon: {
-      color: COLORS.primary,
-      fontSize: 14,
+      color: isUser ? COLORS.primaryFg : '#818CF8',
+      fontSize: 13,
       marginRight: 6,
     },
     ordered_list_icon: {
-      color: COLORS.primary,
+      color: isUser ? COLORS.primaryFg : '#818CF8',
       fontSize: 12,
       fontWeight: '700',
       marginRight: 6,
@@ -143,12 +185,12 @@ export default function MarkdownMessage({ content, isUser = false }: Props) {
       fontSize: 11,
     },
     link: {
-      color: COLORS.primary,
+      color: isUser ? COLORS.primaryFg : '#818CF8',
       textDecorationLine: 'underline',
     },
     blockquote: {
-      backgroundColor: 'rgba(255,255,255,0.03)',
-      borderLeftColor: COLORS.primary,
+      backgroundColor: isUser ? 'rgba(0,0,0,0.15)' : 'rgba(99, 102, 241, 0.07)',
+      borderLeftColor: isUser ? COLORS.primaryFg : '#6366F1',
       borderLeftWidth: 3,
       paddingHorizontal: 8,
       paddingVertical: 4,
@@ -156,5 +198,91 @@ export default function MarkdownMessage({ content, isUser = false }: Props) {
     },
   });
 
-  return <Markdown style={markdownStyles}>{content}</Markdown>;
+  const rules: RenderRules = {
+    fence: (node) => {
+      const lang = (node as any).sourceInfo || '';
+      return <MessageCodeBlock key={node.key} content={node.content} language={lang} />;
+    },
+    code_block: (node) => {
+      return <MessageCodeBlock key={node.key} content={node.content} language="" />;
+    },
+    code_inline: (node, children, parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} style={[inheritedStyles, styles.code_inline]}>
+        {node.content}
+      </Text>
+    ),
+    strong: (node, children, parent, styles, inheritedStyles = {}) => (
+      <Text key={node.key} style={[inheritedStyles, styles.strong]}>
+        {children}
+      </Text>
+    ),
+  };
+
+  return (
+    <Markdown style={markdownStyles} rules={rules}>
+      {content}
+    </Markdown>
+  );
 }
+
+const blockStyles = StyleSheet.create({
+  codeBlockBox: {
+    backgroundColor: '#07090F',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginVertical: 6,
+    overflow: 'hidden',
+  },
+  codeBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0E111C',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  codeBlockLangBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  codeBlockLangText: {
+    color: '#818CF8',
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  codeCopyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  codeCopyBtnPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  codeCopyText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  codeScrollView: {
+    padding: 8,
+  },
+  codeScrollInner: {
+    paddingRight: 16,
+  },
+  codeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 11,
+    lineHeight: 17,
+    color: '#E2E8F0',
+  },
+});
