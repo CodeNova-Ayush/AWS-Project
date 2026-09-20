@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, FlatList } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createIssueRemote, assignAgent, fetchUserRepos } from '../services/api';
 
 type IssueType = 'bug' | 'suggestion' | 'performance';
@@ -94,7 +94,7 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
       style={[styles.typeButton, isSelected && styles.typeButtonSelected]}
       onPress={onSelect}
     >
-      <Feather name={icon} size={14} color={isSelected ? COLORS.primary : COLORS.textSecondary} />
+      <Feather name={icon} size={14} color={isSelected ? '#18181B' : COLORS.textSecondary} />
       <Text style={[styles.typeButtonText, isSelected && styles.typeButtonTextSelected]}>
         {label}
       </Text>
@@ -219,11 +219,11 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
                 disabled={loading || loadingJob}
               >
                 {loadingJob ? (
-                  <ActivityIndicator size="small" color="#000" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <Feather name="cpu" size={20} color="#000" />
-                    <Text style={[styles.submitText, { color: '#000' }]}>Fire Agent</Text>
+                    <Feather name="cpu" size={18} color="#FFFFFF" />
+                    <Text style={[styles.submitText, { color: '#FFFFFF' }]}>Fire Agent</Text>
                   </>
                 )}
               </Pressable>
@@ -234,11 +234,11 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
                 disabled={loading || loadingJob}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <ActivityIndicator size="small" color="#18181B" />
                 ) : (
                   <>
-                    <Feather name="github" size={20} color={COLORS.primary} />
-                    <Text style={[styles.submitText, { color: COLORS.primary }]}>Create Issue Only</Text>
+                    <Feather name="github" size={18} color="#18181B" />
+                    <Text style={[styles.submitText, { color: '#18181B' }]}>Create Issue Only</Text>
                   </>
                 )}
               </Pressable>
@@ -254,55 +254,66 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   content: {
-    backgroundColor: '#1E1E1E',
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     height: '88%',
     padding: SPACING.lg,
+    borderTopWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    ...SHADOWS.lg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   headerTitle: {
     fontSize: FONT_SIZES.lg,
     color: COLORS.textPrimary,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FAF8F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   formContainer: {
     flex: 1,
   },
   label: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   // Repo picker
   repoPicker: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.md,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 12,
     padding: SPACING.md,
     marginBottom: 0,
   },
   repoPickerOpen: {
-    borderColor: COLORS.primary,
+    borderColor: '#18181B',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
@@ -312,17 +323,18 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
   },
   repoPickerPlaceholder: {
-    color: 'rgba(255,255,255,0.3)',
+    color: COLORS.textTertiary,
   },
   pickerDropdown: {
-    backgroundColor: '#161616',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderTopWidth: 0,
-    borderColor: COLORS.primary,
-    borderBottomLeftRadius: BORDER_RADIUS.md,
-    borderBottomRightRadius: BORDER_RADIUS.md,
+    borderColor: '#18181B',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
+    ...SHADOWS.md,
   },
   searchRow: {
     flexDirection: 'row',
@@ -331,7 +343,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   searchInput: {
     flex: 1,
@@ -346,12 +358,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.04)',
+    borderBottomColor: 'rgba(0,0,0,0.04)',
   },
   repoItemSelected: {
-    backgroundColor: 'rgba(208,253,62,0.06)',
+    backgroundColor: 'rgba(24, 24, 27, 0.05)',
   },
   repoItemLeft: {
     flexDirection: 'row',
@@ -363,6 +375,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.sm,
     flex: 1,
+    fontWeight: '500',
   },
   noReposText: {
     color: COLORS.textSecondary,
@@ -372,10 +385,10 @@ const styles = StyleSheet.create({
   },
   // Form
   input: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.md,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 12,
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.md,
     padding: SPACING.md,
@@ -396,14 +409,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: SPACING.md,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#FAF8F5',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(0,0,0,0.07)',
   },
   typeButtonSelected: {
-    backgroundColor: 'rgba(208, 253, 62, 0.1)',
-    borderColor: COLORS.primary,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#18181B',
+    borderWidth: 1.5,
+    ...SHADOWS.sm,
   },
   typeButtonText: {
     color: COLORS.textSecondary,
@@ -411,7 +426,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   typeButtonTextSelected: {
-    color: COLORS.primary,
+    color: '#18181B',
+    fontWeight: '700',
   },
   actions: {
     gap: SPACING.md,
@@ -422,19 +438,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.full,
+    paddingVertical: 14,
+    borderRadius: 14,
   },
   jobButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#18181B',
+    ...SHADOWS.sm,
   },
   onlyIssueButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   submitText: {
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, SPACING } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 
 // Map Expo Router tab route names to icons
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
@@ -26,16 +26,15 @@ export default function FloatingPillNav({ state, navigation }: BottomTabBarProps
             <Pressable
               key={route.key}
               onPress={() => navigation.navigate(route.name)}
-              style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [styles.item, pressed && { opacity: 0.75 }]}
               hitSlop={8}
             >
               <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
                 <Feather
                   name={icon}
                   size={19}
-                  color={isActive ? COLORS.textPrimary : COLORS.textTertiary}
+                  color={isActive ? '#FFFFFF' : '#71717A'}
                 />
-                {isActive && <View style={styles.activeDot} />}
               </View>
             </Pressable>
           );
@@ -57,20 +56,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 8,
-    backgroundColor: 'rgba(15, 18, 28, 0.88)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderRadius: 9999,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     // @ts-ignore
-    backdropFilter: 'blur(24px)',
+    backdropFilter: 'blur(30px)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
     shadowRadius: 24,
-    elevation: 20,
-    gap: 12,
+    elevation: 8,
+    gap: 10,
   },
   item: {
     alignItems: 'center',
@@ -82,19 +81,13 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
   iconWrapActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.35)',
-  },
-  activeDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: '#18181B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
 });

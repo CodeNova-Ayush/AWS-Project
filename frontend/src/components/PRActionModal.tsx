@@ -21,7 +21,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 
 export type PRActionMode = 'approve' | 'reject' | 'merge';
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
@@ -33,9 +33,10 @@ interface PRActionModalProps {
   prNumber?: number;
   baseBranch?: string;
   onClose: () => void;
-  onApprove: () => Promise<void>;
-  onReject: (comment: string) => Promise<void>;
-  onMerge: (method: MergeMethod, commitTitle: string) => Promise<void>;
+  onApprove?: () => Promise<void>;
+  onReject?: (comment: string) => Promise<void>;
+  onMerge?: (method: MergeMethod, commitTitle: string) => Promise<void>;
+  onSuccess?: () => void;
 }
 
 const MERGE_METHODS: { value: MergeMethod; label: string; desc: string }[] = [
@@ -45,9 +46,9 @@ const MERGE_METHODS: { value: MergeMethod; label: string; desc: string }[] = [
 ];
 
 const MODE_CONFIG: Record<PRActionMode, { title: string; icon: keyof typeof Feather.glyphMap; color: string; ctaLabel: string }> = {
-  approve: { title: 'Approve PR', icon: 'check-circle', color: '#4ade80', ctaLabel: 'Approve Pull Request' },
-  reject:  { title: 'Request Changes', icon: 'x-circle', color: '#f87171', ctaLabel: 'Request Changes' },
-  merge:   { title: 'Merge Safety Gate', icon: 'shield', color: '#a78bfa', ctaLabel: 'Confirm & Merge PR' },
+  approve: { title: 'Approve PR', icon: 'check-circle', color: '#16A34A', ctaLabel: 'Approve Pull Request' },
+  reject:  { title: 'Request Changes', icon: 'x-circle', color: '#E11D48', ctaLabel: 'Request Changes' },
+  merge:   { title: 'Merge Safety Gate', icon: 'shield', color: '#7C3AED', ctaLabel: 'Confirm & Merge PR' },
 };
 
 export default function PRActionModal({
@@ -60,6 +61,7 @@ export default function PRActionModal({
   onApprove,
   onReject,
   onMerge,
+  onSuccess,
 }: PRActionModalProps) {
   const [loading, setLoading] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
@@ -93,12 +95,13 @@ export default function PRActionModal({
     setLoading(true);
     try {
       if (mode === 'approve') {
-        await onApprove();
+        if (onApprove) await onApprove();
       } else if (mode === 'reject') {
-        await onReject(rejectComment.trim() || 'Changes requested via MergeDeck');
+        if (onReject) await onReject(rejectComment.trim() || 'Changes requested via MergeDeck');
       } else {
-        await onMerge(mergeMethod, commitTitle.trim());
+        if (onMerge) await onMerge(mergeMethod, commitTitle.trim());
       }
+      onSuccess?.();
       onClose();
     } catch (err) {
       // Leave modal open on error — parent should show error toast
@@ -232,10 +235,10 @@ export default function PRActionModal({
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#000" />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Feather name={cfg.icon} size={16} color="#000" />
+                  <Feather name={cfg.icon} size={16} color="#FFFFFF" />
                   <Text style={styles.ctaText}>
                     {mode === 'merge' ? `Confirm & Merge PR #${prNumber}` : cfg.ctaLabel}
                   </Text>
@@ -266,23 +269,24 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: '#111113',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: SPACING.xl,
     paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.xl,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(0,0,0,0.08)',
     maxHeight: '85%',
+    ...SHADOWS.lg,
   },
   handle: {
-    width: 36,
+    width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#E4E4E7',
     alignSelf: 'center',
     marginTop: SPACING.md,
     marginBottom: SPACING.lg,
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
   iconBadge: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 14,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -305,6 +309,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.lg,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   headerSub: {
     color: COLORS.textSecondary,
@@ -321,17 +326,17 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   textArea: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.lg,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 14,
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.sm,
     padding: SPACING.md,
@@ -344,30 +349,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BORDER_RADIUS.md,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 12,
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.sm,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
+    paddingVertical: SPACING.sm + 4,
   },
   mergeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingVertical: 14,
     paddingHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.06)',
     marginBottom: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#FAF8F5',
   },
   mergeOptionActive: {
-    borderColor: 'rgba(167,139,250,0.4)',
-    backgroundColor: 'rgba(167,139,250,0.06)',
+    borderColor: '#7C3AED',
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.sm,
   },
   mergeRadio: {
     width: 18,
@@ -382,15 +388,15 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#000',
+    backgroundColor: '#7C3AED',
   },
   mergeLabel: {
-    color: COLORS.textSecondary,
+    color: COLORS.textPrimary,
     fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   mergeDesc: {
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     fontSize: FONT_SIZES.xs,
     marginTop: 1,
   },
@@ -399,24 +405,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: SPACING.md + 2,
-    borderRadius: BORDER_RADIUS.xl,
+    paddingVertical: 14,
+    borderRadius: 14,
     marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
   ctaDisabled: {
     opacity: 0.6,
   },
   ctaText: {
-    color: '#000',
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.md,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   safetyGateBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(245, 158, 11, 0.07)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
     padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
@@ -427,10 +434,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   safetyGateTitle: {
-    fontSize: FONT_SIZES.xs,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    color: '#f59e0b',
+    color: '#D97706',
     letterSpacing: 0.8,
   },
   safetyGateQuestion: {
@@ -446,11 +453,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   cancelBtn: {
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#FAF8F5',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    marginTop: 8,
   },
   cancelBtnText: {
     color: COLORS.textSecondary,

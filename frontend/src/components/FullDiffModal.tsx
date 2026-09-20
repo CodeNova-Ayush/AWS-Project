@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { ParsedDiffFile, DiffMetrics } from '../utils/cardHelpers';
 
 interface FullDiffModalProps {
@@ -61,7 +61,7 @@ export default function FullDiffModal({
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
-              <Feather name="x" size={20} color={COLORS.textSecondary} />
+              <Feather name="x" size={18} color={COLORS.textSecondary} />
             </Pressable>
           </View>
 
@@ -85,12 +85,12 @@ export default function FullDiffModal({
                     <Feather
                       name="file-text"
                       size={12}
-                      color={isActive ? COLORS.primary : COLORS.textTertiary}
+                      color={isActive ? '#FFFFFF' : COLORS.textTertiary}
                     />
                     <Text style={[styles.fileTabText, isActive && styles.fileTabTextActive]}>
                       {basename}
                     </Text>
-                    <Text style={styles.fileTabCount}>
+                    <Text style={[styles.fileTabCount, isActive && { color: 'rgba(255,255,255,0.7)' }]}>
                       +{file.additions} -{file.deletions}
                     </Text>
                   </Pressable>
@@ -173,25 +173,26 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   sheet: {
-    backgroundColor: '#0c0f17',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(0,0,0,0.08)',
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     overflow: 'hidden',
+    ...SHADOWS.lg,
   },
   handle: {
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: '#E4E4E7',
     alignSelf: 'center',
     marginTop: 10,
     marginBottom: 6,
@@ -202,7 +203,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -214,36 +216,44 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
   diffPill: {
-    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   diffPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.success,
+    color: '#059669',
   },
   headerSub: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.textSecondary,
   },
   closeBtn: {
-    padding: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FAF8F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   fileTabBar: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    maxHeight: 44,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#FAF8F5',
+    maxHeight: 48,
   },
   fileTabBarInner: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     gap: 8,
     flexDirection: 'row',
   },
@@ -253,13 +263,15 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    ...SHADOWS.sm,
   },
   fileTabActive: {
-    backgroundColor: 'rgba(208, 253, 62, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(208, 253, 62, 0.4)',
+    backgroundColor: '#18181B',
+    borderColor: '#18181B',
   },
   fileTabText: {
     fontSize: 12,
@@ -267,7 +279,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   fileTabTextActive: {
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   fileTabCount: {
@@ -280,15 +292,15 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#0E111C',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   activeFilePath: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
-    color: '#e2e8f0',
+    color: '#F1F5F9',
     flex: 1,
   },
   activeFileBadges: {
@@ -296,18 +308,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fileBadgeAdd: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.success,
+    color: '#34D399',
   },
   fileBadgeDel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.error,
+    color: '#F87171',
   },
   codeContainer: {
     flex: 1,
-    backgroundColor: '#07090e',
+    backgroundColor: '#07090F',
   },
   codeLinesWrapper: {
     minWidth: '100%',
@@ -320,10 +332,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   diffLineAdd: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
   },
   diffLineDel: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
   },
   lineNum: {
     width: 32,
@@ -343,7 +355,7 @@ const styles = StyleSheet.create({
   lineContent: {
     fontSize: 13,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#e2e8f0',
+    color: '#E2E8F0',
     lineHeight: 18,
   },
   lineContentAdd: {
@@ -356,17 +368,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
   },
   closeActionBtn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#18181B',
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    ...SHADOWS.sm,
   },
   closeActionBtnText: {
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

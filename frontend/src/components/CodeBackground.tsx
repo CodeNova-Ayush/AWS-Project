@@ -1,59 +1,62 @@
 import React from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, ImageBackground, useWindowDimensions, Platform } from 'react-native';
+import { COLORS } from '../constants/theme';
 
 interface Props {
   activeColorRGB?: string;
 }
 
-export default function CodeBackground({ activeColorRGB = '99, 102, 241' }: Props) {
+const patternImage = require('../../assets/images/cream_grid_pattern.png');
+
+export default function CodeBackground({ activeColorRGB = '79, 70, 229' }: Props) {
   const { width, height } = useWindowDimensions();
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      {/* Base Canvas */}
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#090A0F' }]} />
+      {/* 1. Base Warm Cream Canvas */}
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: COLORS.background }]} />
 
-      {/* Subtle Ambient Radial Glow (Top / Center) */}
+      {/* 2. Diamond Dot Tiled Pattern from attached asset */}
+      <ImageBackground
+        source={patternImage}
+        style={StyleSheet.absoluteFillObject}
+        resizeMode="repeat"
+        imageStyle={{
+          opacity: 0.95,
+          // @ts-ignore
+          ...(Platform.OS === 'web' ? { backgroundRepeat: 'repeat' } : {}),
+        }}
+      />
+
+      {/* 3. Subtle Warm Ambient Radial Glow (Top / Center) */}
       <View
         style={{
           position: 'absolute',
-          top: -height * 0.15,
+          top: -height * 0.1,
           left: width * 0.1,
           width: width * 0.8,
           height: height * 0.45,
           borderRadius: width * 0.4,
-          backgroundColor: `rgba(${activeColorRGB}, 0.06)`,
-          transform: [{ scaleX: 1.4 }],
-          // @ts-ignore - web filter support
-          filter: 'blur(80px)',
-        }}
-      />
-
-      {/* Subtle Secondary Ambient Glow (Bottom Right) */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: height * 0.05,
-          right: -width * 0.2,
-          width: width * 0.6,
-          height: width * 0.6,
-          borderRadius: width * 0.3,
-          backgroundColor: 'rgba(56, 189, 248, 0.03)',
+          backgroundColor: `rgba(${activeColorRGB}, 0.03)`,
+          transform: [{ scaleX: 1.3 }],
           // @ts-ignore - web filter support
           filter: 'blur(70px)',
         }}
       />
 
-      {/* Subtle Vignette overlay */}
+      {/* 4. Subtle Warm Amber Tint (Bottom Center) */}
       <View
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: 'transparent',
-            // @ts-ignore - web backdrop
-            backgroundImage: 'radial-gradient(circle at 50% 30%, transparent 40%, rgba(9, 10, 15, 0.65) 100%)',
-          },
-        ]}
+        style={{
+          position: 'absolute',
+          bottom: -height * 0.05,
+          right: -width * 0.1,
+          width: width * 0.7,
+          height: width * 0.7,
+          borderRadius: width * 0.35,
+          backgroundColor: 'rgba(217, 119, 6, 0.02)',
+          // @ts-ignore - web filter support
+          filter: 'blur(80px)',
+        }}
       />
     </View>
   );

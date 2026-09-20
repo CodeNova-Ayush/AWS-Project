@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 
 interface Props {
   isSaved: boolean;
@@ -39,7 +39,7 @@ export default function ActionSidebar({
       {/* Discuss / AI Chat */}
       <SidebarButton
         testID="action-chat"
-        iconElement={<Ionicons name="chatbubble-ellipses-outline" size={19} color={COLORS.textPrimary} />}
+        iconElement={<Ionicons name="chatbubble-ellipses-outline" size={19} color="#18181B" />}
         label="Chat"
         onPress={onChat}
       />
@@ -51,12 +51,12 @@ export default function ActionSidebar({
           <Feather
             name="bookmark"
             size={18}
-            color={isSaved ? COLORS.primaryLight : COLORS.textSecondary}
+            color={isSaved ? '#4F46E5' : '#18181B'}
           />
         }
         label={isSaved ? 'Saved' : 'Save'}
         isActive={isSaved}
-        activeColor={COLORS.primaryLight}
+        activeColor="#4F46E5"
         onPress={onSave}
       />
 
@@ -64,11 +64,11 @@ export default function ActionSidebar({
       {isPR && onApprovePR && (
         <SidebarButton
           testID="action-approve-pr"
-          iconElement={<Feather name="check-circle" size={18} color={COLORS.success} />}
+          iconElement={<Feather name="check-circle" size={18} color="#059669" />}
           label="Approve"
-          badgeColor="rgba(16, 185, 129, 0.15)"
-          borderColor="rgba(16, 185, 129, 0.3)"
-          textColor={COLORS.success}
+          badgeColor="rgba(5, 150, 105, 0.1)"
+          borderColor="rgba(5, 150, 105, 0.25)"
+          textColor="#059669"
           onPress={onApprovePR}
         />
       )}
@@ -77,11 +77,11 @@ export default function ActionSidebar({
       {isPR && onRejectPR && (
         <SidebarButton
           testID="action-reject-pr"
-          iconElement={<Feather name="x-circle" size={18} color={COLORS.error} />}
+          iconElement={<Feather name="x-circle" size={18} color="#E11D48" />}
           label="Reject"
-          badgeColor="rgba(244, 63, 94, 0.15)"
-          borderColor="rgba(244, 63, 94, 0.3)"
-          textColor={COLORS.error}
+          badgeColor="rgba(225, 29, 72, 0.1)"
+          borderColor="rgba(225, 29, 72, 0.25)"
+          textColor="#E11D48"
           onPress={onRejectPR}
         />
       )}
@@ -90,49 +90,54 @@ export default function ActionSidebar({
       {isPR && onMergePR && (
         <SidebarButton
           testID="action-merge-pr"
-          iconElement={<Feather name="git-merge" size={18} color={COLORS.primaryLight} />}
+          iconElement={<Feather name="git-merge" size={18} color="#4F46E5" />}
           label="Merge"
-          badgeColor="rgba(99, 102, 241, 0.18)"
-          borderColor="rgba(99, 102, 241, 0.35)"
-          textColor={COLORS.primaryLight}
+          badgeColor="rgba(79, 70, 229, 0.1)"
+          borderColor="rgba(79, 70, 229, 0.25)"
+          textColor="#4F46E5"
           onPress={onMergePR}
         />
       )}
 
-      {/* Apply (non-PR) */}
+      {/* Apply / Quick Action */}
       {!isPR && (
         <SidebarButton
           testID="action-apply"
-          iconElement={<Feather name="play" size={18} color={isApplied ? COLORS.success : COLORS.primaryLight} />}
+          iconElement={
+            <Feather
+              name="play"
+              size={18}
+              color={isApplied ? '#059669' : '#18181B'}
+            />
+          }
           label={isApplied ? 'Applied' : 'Apply'}
+          isActive={isApplied}
+          activeColor="#059669"
           onPress={onApply}
         />
       )}
 
-      {/* Assign Agent */}
-      {!isPR && onAssignAgent && (
+      {/* Assign Agent / Agent Traces */}
+      {isAgentPR && onViewAgentTrace ? (
         <SidebarButton
-          testID="action-assign"
-          iconElement={<Feather name="cpu" size={18} color={COLORS.textSecondary} />}
+          testID="action-agent-trace"
+          iconElement={<Feather name="cpu" size={18} color="#4F46E5" />}
+          label="Agent"
+          onPress={onViewAgentTrace}
+        />
+      ) : onAssignAgent ? (
+        <SidebarButton
+          testID="action-assign-agent"
+          iconElement={<Feather name="cpu" size={18} color="#18181B" />}
           label="Agent"
           onPress={onAssignAgent}
         />
-      )}
-
-      {/* View Trace */}
-      {isPR && isAgentPR && onViewAgentTrace && (
-        <SidebarButton
-          testID="action-view-trace"
-          iconElement={<Feather name="activity" size={18} color={COLORS.secondary} />}
-          label="Trace"
-          onPress={onViewAgentTrace}
-        />
-      )}
+      ) : null}
 
       {/* Share */}
       <SidebarButton
         testID="action-share"
-        iconElement={<Feather name="share-2" size={17} color={COLORS.textSecondary} />}
+        iconElement={<Feather name="share-2" size={18} color="#18181B" />}
         label="Share"
         onPress={onShare}
       />
@@ -145,7 +150,7 @@ function SidebarButton({
   iconElement,
   label,
   onPress,
-  isActive,
+  isActive = false,
   activeColor,
   badgeColor,
   borderColor,
@@ -212,31 +217,31 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.92 }],
   },
   iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(17, 20, 30, 0.82)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     // @ts-ignore
-    backdropFilter: 'blur(16px)',
+    backdropFilter: 'blur(20px)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
-    elevation: 8,
+    elevation: 4,
   },
   iconCircleActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    borderColor: 'rgba(79, 70, 229, 0.3)',
   },
   label: {
     fontSize: 10,
-    marginTop: 3,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
+    marginTop: 4,
+    fontWeight: '600',
+    color: '#52525B',
     letterSpacing: 0.2,
     textAlign: 'center',
   },

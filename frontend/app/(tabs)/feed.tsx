@@ -426,7 +426,7 @@ export default function FeedScreen() {
               }}
               hitSlop={6}
             >
-              <Feather name="plus" size={13} color={COLORS.primary} />
+              <Feather name="plus" size={13} color="#FFFFFF" />
               <Text style={styles.compactCreateText}>Request</Text>
             </Pressable>
 
@@ -436,9 +436,9 @@ export default function FeedScreen() {
               hitSlop={8}
             >
               {forceReloading ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color="#18181B" />
               ) : (
-                <Feather name="refresh-cw" size={12} color="#fff" />
+                <Feather name="refresh-cw" size={12} color="#18181B" />
               )}
             </Pressable>
           </View>
@@ -450,12 +450,15 @@ export default function FeedScreen() {
         <ActionSidebar
           isSaved={savedIds.has(currentIssue.issue_id)}
           isApplied={appliedIds.has(currentIssue.issue_id)}
-          onChat={handleChat}
+          onChat={() => handleChat()}
           onSave={handleSave}
           onApply={handleApply}
           onShare={handleShare}
-          onAssignAgent={handleAssignAgent}
-          isPR={currentIssue.issue_id.startsWith('gh_pr_')}
+          onAssignAgent={() => handleAssignAgent()}
+          isPR={
+            currentIssue.issue_id.startsWith('gh_pr_') ||
+            (!!currentIssue.diff_lines && currentIssue.diff_lines.length > 0)
+          }
           isAgentPR={!!currentIssue.agent_job_id}
           onViewAgentTrace={() => {
             if (currentIssue?.agent_job_id) {
@@ -482,11 +485,15 @@ export default function FeedScreen() {
       {currentIssue && (
         <AssignAgentModal
           issueId={currentIssue.issue_id}
-          repoName={currentIssue.github_owner && currentIssue.github_repo ? `${currentIssue.github_owner}/${currentIssue.github_repo}` : currentIssue.project || 'owner/repo'}
+          repoName={
+            currentIssue.github_owner && currentIssue.github_repo
+              ? `${currentIssue.github_owner}/${currentIssue.github_repo}`
+              : currentIssue.project || 'owner/repo'
+          }
           visible={assignAgentVisible}
           onClose={() => setAssignAgentVisible(false)}
           onAssigned={(jobId) => {
-             router.push(`/session/${jobId}`);
+            router.push(`/session/${jobId}`);
           }}
         />
       )}
@@ -506,15 +513,22 @@ export default function FeedScreen() {
           mode={prModalMode}
           prTitle={currentIssue.title}
           prNumber={currentIssue.github_pr_number || 2}
-          baseBranch={currentIssue.base_branch || 'main'}
           onClose={() => setPrModalVisible(false)}
-          onApprove={executePRApprove}
-          onReject={executePRReject}
-          onMerge={executePRMerge}
+          onSuccess={() => {
+            showToast(
+              prModalMode === 'approve'
+                ? 'PR approved!'
+                : prModalMode === 'reject'
+                ? 'Changes requested!'
+                : 'PR merged!',
+              'success'
+            );
+            handleForceReload();
+          }}
         />
       )}
 
-      {/* CI / CD Log Modal */}
+      {/* CI Runner Failure / Log Modal */}
       {selectedCIInfo && (
         <CILogModal
           visible={ciModalVisible}
@@ -575,11 +589,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 50,
-    backgroundColor: 'rgba(9, 10, 15, 0.82)',
+    backgroundColor: 'rgba(250, 248, 245, 0.88)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
     // @ts-ignore
-    backdropFilter: 'blur(20px)',
+    backdropFilter: 'blur(24px)',
   },
   compactHeaderRow: {
     flexDirection: 'row',
@@ -591,11 +605,15 @@ const styles = StyleSheet.create({
   scopeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: BORDER_RADIUS.full,
-    padding: 2,
+    padding: 2.5,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
   scopeBtn: {
     paddingHorizontal: 10,
@@ -603,22 +621,26 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.full,
   },
   scopeBtnActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#18181B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   scopeText: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
     letterSpacing: 0.2,
   },
   scopeTextActive: {
-    color: COLORS.textPrimary,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   typeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 4,
   },
   typeBtn: {
@@ -628,16 +650,16 @@ const styles = StyleSheet.create({
   },
   typeBtnActive: {
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.primaryLight,
+    borderBottomColor: '#18181B',
   },
   typeBtnText: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   typeBtnTextActive: {
-    color: COLORS.textPrimary,
-    fontWeight: '600',
+    color: '#18181B',
+    fontWeight: '800',
   },
   actionGroup: {
     flexDirection: 'row',
@@ -648,27 +670,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: '#18181B',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: BORDER_RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.28)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   compactCreateText: {
-    color: COLORS.primaryLight,
+    color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   compactReloadBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
   emptyContainer: {
     justifyContent: 'center',
@@ -679,14 +707,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    fontWeight: '800',
+    color: '#18181B',
     textAlign: 'center',
     letterSpacing: -0.3,
   },
   emptyDesc: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: '#52525B',
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 280,

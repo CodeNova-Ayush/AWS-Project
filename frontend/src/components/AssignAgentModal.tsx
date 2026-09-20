@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { assignAgent } from '../services/api';
 
 interface Props {
@@ -121,26 +121,30 @@ export default function AssignAgentModal({ issueId, repoName, visible, onClose, 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#1E1E1E',
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: SPACING.xl,
-    paddingBottom: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    borderTopWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    ...SHADOWS.lg,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   title: {
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.lg,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   subtitle: {
     color: COLORS.textSecondary,
@@ -151,33 +155,39 @@ const styles = StyleSheet.create({
   agentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-    backgroundColor: '#2A2A2A',
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    padding: 14,
+    backgroundColor: '#FAF8F5',
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   agentRowSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: 'rgba(208, 253, 62, 0.05)',
+    borderColor: '#18181B',
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.sm,
   },
   agentRowSelectedClaude: {
     borderColor: '#E8855A',
-    backgroundColor: 'rgba(232, 133, 90, 0.05)',
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.sm,
   },
   agentRowSelectedKiro: {
     borderColor: '#FF9900',
-    backgroundColor: 'rgba(255, 153, 0, 0.05)',
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.sm,
   },
   agentIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3A3A3A',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    ...SHADOWS.sm,
   },
   agentInfo: {
     flex: 1,
@@ -185,12 +195,14 @@ const styles = StyleSheet.create({
   agentTitle: {
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.md,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.2,
   },
   agentDesc: {
     color: COLORS.textSecondary,
     fontSize: FONT_SIZES.xs,
+    lineHeight: 16,
   },
   footer: {
     flexDirection: 'row',
@@ -199,32 +211,36 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    padding: SPACING.lg,
+    paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#333',
+    borderRadius: 12,
+    backgroundColor: '#FAF8F5',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
   },
   cancelButtonText: {
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
   },
   assignButton: {
     flex: 1,
-    padding: SPACING.lg,
+    paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    backgroundColor: '#18181B',
     flexDirection: 'row',
     justifyContent: 'center',
     gap: SPACING.sm,
+    ...SHADOWS.sm,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   assignButtonText: {
-    color: '#000',
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

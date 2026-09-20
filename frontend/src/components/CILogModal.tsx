@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { CIInfo } from '../utils/cardHelpers';
 
 interface CILogModalProps {
@@ -48,12 +48,12 @@ export default function CILogModal({
             <View
               style={[
                 styles.statusIconWrapper,
-                { backgroundColor: isPassed ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)' },
+                { backgroundColor: isPassed ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)' },
               ]}
             >
               <Feather
                 name={isPassed ? 'check-circle' : 'alert-triangle'}
-                size={22}
+                size={20}
                 color={isPassed ? COLORS.success : COLORS.error}
               />
             </View>
@@ -66,7 +66,7 @@ export default function CILogModal({
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
-              <Feather name="x" size={20} color={COLORS.textSecondary} />
+              <Feather name="x" size={18} color={COLORS.textSecondary} />
             </Pressable>
           </View>
 
@@ -150,25 +150,26 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   sheet: {
-    backgroundColor: '#12151c',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(0,0,0,0.08)',
     maxHeight: '80%',
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    ...SHADOWS.lg,
   },
   handle: {
-    width: 36,
+    width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#E4E4E7',
     alignSelf: 'center',
     marginTop: 10,
     marginBottom: 6,
@@ -179,13 +180,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(0,0,0,0.06)',
     gap: 12,
   },
   statusIconWrapper: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -193,6 +194,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
   headerSub: {
     fontSize: FONT_SIZES.xs,
@@ -200,15 +202,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeBtn: {
-    padding: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FAF8F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   body: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
   },
   summaryCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#FAF8F5',
+    borderRadius: 14,
     borderWidth: 1,
     padding: SPACING.md,
     marginBottom: SPACING.lg,
@@ -225,7 +234,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
   },
   metricValue: {
     color: COLORS.textPrimary,
@@ -248,12 +257,12 @@ const styles = StyleSheet.create({
   },
   logSectionTitle: {
     fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.error,
   },
   terminalBox: {
-    backgroundColor: '#0a0d14',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#07090F',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.25)',
     padding: SPACING.md,
@@ -280,6 +289,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     marginBottom: 6,
+    letterSpacing: -0.2,
   },
   successDesc: {
     color: COLORS.textSecondary,
@@ -292,14 +302,15 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   doneBtn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#18181B',
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    ...SHADOWS.sm,
   },
   doneBtnText: {
-    color: COLORS.textPrimary,
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

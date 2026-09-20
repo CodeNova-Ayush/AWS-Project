@@ -13,8 +13,8 @@ export default function DiffViewer({ lines, language }: Props) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.dot} />
-        <View style={[styles.dot, { backgroundColor: COLORS.warning }]} />
-        <View style={[styles.dot, { backgroundColor: COLORS.success }]} />
+        <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
+        <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
         <Text style={styles.langLabel}>{language}</Text>
       </View>
       <ScrollView style={styles.codeScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
@@ -32,8 +32,8 @@ export default function DiffViewer({ lines, language }: Props) {
             <Text
               style={[
                 styles.prefix,
-                line.type === 'add' && { color: COLORS.success },
-                line.type === 'del' && { color: COLORS.error },
+                line.type === 'add' && { color: '#34D399' },
+                line.type === 'del' && { color: '#FB7185' },
               ]}
             >
               {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
@@ -41,8 +41,8 @@ export default function DiffViewer({ lines, language }: Props) {
             <Text
               style={[
                 styles.code,
-                line.type === 'add' && { color: COLORS.success },
-                line.type === 'del' && { color: COLORS.error },
+                line.type === 'add' && { color: '#86EFAC' },
+                line.type === 'del' && { color: '#FCA5A5' },
               ]}
               numberOfLines={1}
             >
@@ -57,37 +57,42 @@ export default function DiffViewer({ lines, language }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.codeBg,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#090B12',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
     overflow: 'hidden',
     maxHeight: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
+    paddingVertical: 8,
+    backgroundColor: '#111422',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
     gap: 6,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.error,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#EF4444',
   },
   langLabel: {
-    color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.xs,
+    color: '#94A3B8',
+    fontSize: 10,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginLeft: 'auto',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '600',
+    letterSpacing: 0.8,
+    fontWeight: '700',
   },
   codeScroll: {
     padding: SPACING.sm,
@@ -97,32 +102,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 2,
     paddingHorizontal: SPACING.xs,
-    borderRadius: 3,
+    borderRadius: 4,
   },
   lineAdd: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
   },
   lineDel: {
-    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    backgroundColor: 'rgba(244, 63, 94, 0.14)',
   },
   lineNumber: {
-    color: COLORS.textTertiary,
+    color: '#64748B',
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     width: 24,
     textAlign: 'right',
     marginRight: SPACING.sm,
-    opacity: 0.5,
+    opacity: 0.6,
   },
   prefix: {
-    color: COLORS.textTertiary,
+    color: '#64748B',
     fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     width: 14,
     fontWeight: '700',
   },
   code: {
-    color: '#CBD5E1',
+    color: '#E2E8F0',
     fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     flex: 1,

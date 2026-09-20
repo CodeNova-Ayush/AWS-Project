@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { CodeIssue } from '../constants/types';
 import DiffViewer from './DiffViewer';
 import AgentTrajectory from './AgentTrajectory';
@@ -183,12 +183,12 @@ export default function CodeIssueCard({
                       {
                         borderColor:
                           ciInfo.status === 'passed'
-                            ? 'rgba(16, 185, 129, 0.28)'
-                            : 'rgba(244, 63, 94, 0.28)',
+                            ? 'rgba(5, 150, 105, 0.25)'
+                            : 'rgba(225, 29, 72, 0.25)',
                         backgroundColor:
                           ciInfo.status === 'passed'
-                            ? 'rgba(16, 185, 129, 0.1)'
-                            : 'rgba(244, 63, 94, 0.1)',
+                            ? 'rgba(5, 150, 105, 0.08)'
+                            : 'rgba(225, 29, 72, 0.08)',
                       },
                     ]}
                     hitSlop={6}
@@ -198,7 +198,7 @@ export default function CodeIssueCard({
                         styles.ciIndicatorDot,
                         {
                           backgroundColor:
-                            ciInfo.status === 'passed' ? COLORS.success : COLORS.error,
+                            ciInfo.status === 'passed' ? '#059669' : '#E11D48',
                         },
                       ]}
                     />
@@ -207,7 +207,7 @@ export default function CodeIssueCard({
                         styles.ciText,
                         {
                           color:
-                            ciInfo.status === 'passed' ? '#34D399' : '#FB7185',
+                            ciInfo.status === 'passed' ? '#059669' : '#E11D48',
                         },
                       ]}
                     >
@@ -225,7 +225,7 @@ export default function CodeIssueCard({
 
                 {/* 2. Repository Identifier */}
                 <View style={styles.repoRow}>
-                  <Feather name="folder" size={12} color={COLORS.textTertiary} />
+                  <Feather name="folder" size={12} color="#71717A" />
                   <Text style={styles.repoText} numberOfLines={1}>
                     {repoName}
                   </Text>
@@ -261,16 +261,16 @@ export default function CodeIssueCard({
                       {
                         backgroundColor:
                           aiRisk.level === 'LOW'
-                            ? 'rgba(16, 185, 129, 0.1)'
+                            ? 'rgba(5, 150, 105, 0.08)'
                             : aiRisk.level === 'HIGH'
-                            ? 'rgba(244, 63, 94, 0.1)'
-                            : 'rgba(245, 158, 11, 0.1)',
+                            ? 'rgba(225, 29, 72, 0.08)'
+                            : 'rgba(217, 119, 6, 0.08)',
                         borderColor:
                           aiRisk.level === 'LOW'
-                            ? 'rgba(16, 185, 129, 0.25)'
+                            ? 'rgba(5, 150, 105, 0.2)'
                             : aiRisk.level === 'HIGH'
-                            ? 'rgba(244, 63, 94, 0.25)'
-                            : 'rgba(245, 158, 11, 0.25)',
+                            ? 'rgba(225, 29, 72, 0.2)'
+                            : 'rgba(217, 119, 6, 0.2)',
                       },
                     ]}
                   >
@@ -279,10 +279,10 @@ export default function CodeIssueCard({
                       size={12}
                       color={
                         aiRisk.level === 'LOW'
-                          ? '#34D399'
+                          ? '#059669'
                           : aiRisk.level === 'HIGH'
-                          ? '#FB7185'
-                          : '#FBBF24'
+                          ? '#E11D48'
+                          : '#D97706'
                       }
                     />
                     <Text
@@ -291,10 +291,10 @@ export default function CodeIssueCard({
                         {
                           color:
                             aiRisk.level === 'LOW'
-                              ? '#34D399'
+                              ? '#059669'
                               : aiRisk.level === 'HIGH'
-                              ? '#FB7185'
-                              : '#FBBF24',
+                              ? '#E11D48'
+                              : '#D97706',
                         },
                       ]}
                     >
@@ -306,7 +306,7 @@ export default function CodeIssueCard({
                 {/* 5. AI Summary Section */}
                 <View style={styles.aiSummaryContainer}>
                   <View style={styles.aiSummaryHeader}>
-                    <Feather name="cpu" size={13} color={COLORS.primaryLight} />
+                    <Feather name="cpu" size={13} color="#4F46E5" />
                     <Text style={styles.aiSummaryTitle}>AI SUMMARY</Text>
                   </View>
                   {aiBullets.map((bullet, idx) => (
@@ -331,12 +331,12 @@ export default function CodeIssueCard({
                 >
                   <View style={styles.snippetHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <Feather name="file-text" size={13} color={COLORS.primaryLight} />
+                      <Feather name="file-text" size={13} color="#4F46E5" />
                       <Text style={styles.snippetFilename} numberOfLines={1}>
                         {primaryFile.filename}
                       </Text>
                     </View>
-                    <Feather name="maximize-2" size={12} color={COLORS.textTertiary} />
+                    <Feather name="maximize-2" size={12} color="#71717A" />
                   </View>
 
                   <View style={styles.snippetContent}>
@@ -352,8 +352,8 @@ export default function CodeIssueCard({
                         <Text
                           style={[
                             styles.snippetPrefix,
-                            line.type === 'add' && { color: '#34D399' },
-                            line.type === 'del' && { color: '#FB7185' },
+                            line.type === 'add' && { color: '#059669' },
+                            line.type === 'del' && { color: '#E11D48' },
                           ]}
                         >
                           {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
@@ -361,8 +361,8 @@ export default function CodeIssueCard({
                         <Text
                           style={[
                             styles.snippetCodeText,
-                            line.type === 'add' && { color: '#86EFAC' },
-                            line.type === 'del' && { color: '#FCA5A5' },
+                            line.type === 'add' && { color: '#047857' },
+                            line.type === 'del' && { color: '#BE123C' },
                           ]}
                           numberOfLines={1}
                         >
@@ -374,7 +374,7 @@ export default function CodeIssueCard({
 
                   <View style={styles.snippetFooter}>
                     <Text style={styles.snippetFooterText}>Tap to view full diff</Text>
-                    <Feather name="arrow-right" size={11} color={COLORS.primaryLight} />
+                    <Feather name="arrow-right" size={11} color="#4F46E5" />
                   </View>
                 </Pressable>
               </>
@@ -396,12 +396,12 @@ export default function CodeIssueCard({
                     <Feather
                       name={issueType === 'bug' ? 'alert-circle' : issueType === 'performance' ? 'zap' : 'compass'}
                       size={11}
-                      color={issueType === 'bug' ? '#FB7185' : '#818CF8'}
+                      color={issueType === 'bug' ? '#E11D48' : '#4F46E5'}
                     />
                     <Text
                       style={[
                         styles.issueTypeText,
-                        { color: issueType === 'bug' ? '#FB7185' : '#818CF8' },
+                        { color: issueType === 'bug' ? '#E11D48' : '#4F46E5' },
                       ]}
                     >
                       {typeLabel}
@@ -411,14 +411,14 @@ export default function CodeIssueCard({
                   <Text style={styles.metaBullet}>•</Text>
 
                   <View style={styles.branchPill}>
-                    <Feather name="git-branch" size={11} color={COLORS.textTertiary} />
+                    <Feather name="git-branch" size={11} color="#71717A" />
                     <Text style={styles.branchPillText}>{branchName}</Text>
                   </View>
                 </View>
 
                 {/* 2. Repository Identifier */}
                 <View style={styles.repoRow}>
-                  <Feather name="folder" size={12} color={COLORS.textTertiary} />
+                  <Feather name="folder" size={12} color="#71717A" />
                   <Text style={styles.repoText} numberOfLines={1}>
                     {repoName}
                   </Text>
@@ -449,7 +449,7 @@ export default function CodeIssueCard({
                 {/* 4. Priority / Readiness Badge */}
                 <View style={styles.riskRow}>
                   <View style={styles.issueReadinessPill}>
-                    <Feather name="zap" size={11} color="#34D399" />
+                    <Feather name="zap" size={11} color="#059669" />
                     <Text style={styles.issueReadinessText}>AI SOLVER READY</Text>
                   </View>
                 </View>
@@ -457,7 +457,7 @@ export default function CodeIssueCard({
                 {/* 5. AI Resolution Strategy Container */}
                 <View style={styles.aiSummaryContainer}>
                   <View style={styles.aiSummaryHeader}>
-                    <Feather name="cpu" size={13} color={COLORS.primaryLight} />
+                    <Feather name="cpu" size={13} color="#4F46E5" />
                     <Text style={styles.aiSummaryTitle}>AI RESOLUTION STRATEGY</Text>
                   </View>
                   <View style={styles.bulletItem}>
@@ -466,7 +466,8 @@ export default function CodeIssueCard({
                       Locate root cause in{' '}
                       <Text
                         style={{
-                          color: '#F1F5F9',
+                          color: '#18181B',
+                          fontWeight: '600',
                           fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
                         }}
                       >
@@ -503,14 +504,14 @@ export default function CodeIssueCard({
                 >
                   <View style={styles.snippetHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <Feather name="align-left" size={13} color={COLORS.primaryLight} />
+                      <Feather name="align-left" size={13} color="#4F46E5" />
                       <Text style={styles.snippetFilename} numberOfLines={1}>
                         Issue Specifications
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={{ fontSize: 11, color: COLORS.textTertiary }}>Details</Text>
-                      <Feather name="chevron-right" size={12} color={COLORS.textTertiary} />
+                      <Text style={{ fontSize: 11, color: '#71717A', fontWeight: '500' }}>Details</Text>
+                      <Feather name="chevron-right" size={12} color="#71717A" />
                     </View>
                   </View>
 
@@ -520,10 +521,10 @@ export default function CodeIssueCard({
 
                   <View style={styles.issueDispatchFooter}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <Feather name="zap" size={12} color={COLORS.primaryLight} />
+                      <Feather name="zap" size={12} color="#4F46E5" />
                       <Text style={styles.snippetFooterText}>Swipe or tap for full specs & AI solver</Text>
                     </View>
-                    <Feather name="arrow-right" size={11} color={COLORS.primaryLight} />
+                    <Feather name="arrow-right" size={11} color="#4F46E5" />
                   </View>
                 </Pressable>
               </>
@@ -554,7 +555,7 @@ export default function CodeIssueCard({
                 onPress={goToFeed}
                 hitSlop={8}
               >
-                <Feather name="arrow-left" size={14} color="#CBD5E1" />
+                <Feather name="arrow-left" size={14} color="#18181B" />
                 <Text style={styles.detailsBackText}>Feed</Text>
               </Pressable>
 
@@ -571,20 +572,20 @@ export default function CodeIssueCard({
                 style={[
                   styles.statusBadge,
                   isPR
-                    ? { backgroundColor: 'rgba(129, 140, 248, 0.12)', borderColor: 'rgba(129, 140, 248, 0.25)' }
-                    : { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.25)' },
+                    ? { backgroundColor: 'rgba(79, 70, 229, 0.08)', borderColor: 'rgba(79, 70, 229, 0.25)' }
+                    : { backgroundColor: 'rgba(5, 150, 105, 0.08)', borderColor: 'rgba(5, 150, 105, 0.25)' },
                 ]}
               >
                 <View
                   style={[
                     styles.statusBadgeDot,
-                    { backgroundColor: isPR ? '#818CF8' : '#34D399' },
+                    { backgroundColor: isPR ? '#4F46E5' : '#059669' },
                   ]}
                 />
                 <Text
                   style={[
                     styles.statusBadgeText,
-                    { color: isPR ? '#818CF8' : '#34D399' },
+                    { color: isPR ? '#4F46E5' : '#059669' },
                   ]}
                 >
                   {isPR
@@ -597,12 +598,12 @@ export default function CodeIssueCard({
                 <Feather
                   name={issueType === 'bug' ? 'alert-circle' : issueType === 'performance' ? 'zap' : 'tag'}
                   size={11}
-                  color={issueType === 'bug' ? '#FB7185' : '#818CF8'}
+                  color={issueType === 'bug' ? '#E11D48' : '#4F46E5'}
                 />
                 <Text
                   style={[
                     styles.detailsTypeText,
-                    { color: issueType === 'bug' ? '#FB7185' : '#818CF8' },
+                    { color: issueType === 'bug' ? '#E11D48' : '#4F46E5' },
                   ]}
                 >
                   {typeLabel}
@@ -610,14 +611,14 @@ export default function CodeIssueCard({
               </View>
 
               <View style={styles.detailsBranchBadge}>
-                <Feather name="git-branch" size={11} color={COLORS.textTertiary} />
+                <Feather name="git-branch" size={11} color="#71717A" />
                 <Text style={styles.detailsBranchText}>{branchName}</Text>
               </View>
             </View>
 
             {/* Repo Identifier */}
             <View style={styles.detailsRepoRow}>
-              <Feather name="folder" size={13} color={COLORS.textTertiary} />
+              <Feather name="folder" size={13} color="#71717A" />
               <Text style={styles.detailsRepoText}>{repoName}</Text>
             </View>
 
@@ -644,7 +645,7 @@ export default function CodeIssueCard({
             {/* Description Card (Markdown Parsed with Special Bold & Code Blocks) */}
             <View style={styles.detailsDescCard}>
               <View style={styles.detailsDescHeader}>
-                <Feather name="file-text" size={13} color={COLORS.primaryLight} />
+                <Feather name="file-text" size={13} color="#4F46E5" />
                 <Text style={styles.detailsDescHeaderTitle}>
                   {isPR ? 'PR SPECIFICATIONS & CONTEXT' : 'ISSUE SPECIFICATIONS'}
                 </Text>
@@ -662,8 +663,8 @@ export default function CodeIssueCard({
                       style={[
                         styles.githubLabelBadge,
                         {
-                          backgroundColor: `#${lbl.color}20`,
-                          borderColor: `#${lbl.color}50`,
+                          backgroundColor: `#${lbl.color}15`,
+                          borderColor: `#${lbl.color}40`,
                         },
                       ]}
                     >
@@ -681,7 +682,7 @@ export default function CodeIssueCard({
               <View style={styles.agentSolverCard}>
                 <View style={styles.agentSolverHeader}>
                   <View style={styles.agentBadge}>
-                    <Feather name="cpu" size={13} color="#818CF8" />
+                    <Feather name="cpu" size={13} color="#4F46E5" />
                     <Text style={styles.agentBadgeText}>AUTONOMOUS AGENT SOLVER</Text>
                   </View>
                   <View style={styles.agentReadyPill}>
@@ -696,19 +697,19 @@ export default function CodeIssueCard({
 
                 <View style={styles.agentFeatureList}>
                   <View style={styles.agentFeatureItem}>
-                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Feather name="check-circle" size={13} color="#059669" />
                     <Text style={styles.agentFeatureText}>
                       Isolated container sandbox with auto-branching
                     </Text>
                   </View>
                   <View style={styles.agentFeatureItem}>
-                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Feather name="check-circle" size={13} color="#059669" />
                     <Text style={styles.agentFeatureText}>
                       Zero-shot bug resolution & AST syntax verification
                     </Text>
                   </View>
                   <View style={styles.agentFeatureItem}>
-                    <Feather name="check-circle" size={13} color="#34D399" />
+                    <Feather name="check-circle" size={13} color="#059669" />
                     <Text style={styles.agentFeatureText}>
                       Automated CI regression tests & clean PR submission
                     </Text>
@@ -737,7 +738,7 @@ export default function CodeIssueCard({
                     onPress={onChat}
                     testID="chat-agent-button"
                   >
-                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="#CBD5E1" />
+                    <Ionicons name="chatbubble-ellipses-outline" size={15} color="#18181B" />
                     <Text style={styles.chatDiscussButtonText}>Discuss with AI Assistant</Text>
                   </Pressable>
                 </View>
@@ -748,7 +749,7 @@ export default function CodeIssueCard({
             {issue.diff_lines && issue.diff_lines.length > 0 && (
               <View style={styles.diffSection}>
                 <View style={styles.sectionHeader}>
-                  <Feather name="code" size={13} color={COLORS.primaryLight} />
+                  <Feather name="code" size={13} color="#4F46E5" />
                   <Text style={styles.sectionHeaderTitle}>PROPOSED CHANGES</Text>
                 </View>
                 <DiffViewer lines={issue.diff_lines} language={issue.language} />
@@ -759,7 +760,7 @@ export default function CodeIssueCard({
             {issue.trajectory_steps && issue.trajectory_steps.length > 0 && (
               <View style={styles.trajectorySection}>
                 <View style={styles.sectionHeader}>
-                  <Feather name="activity" size={13} color={COLORS.primaryLight} />
+                  <Feather name="activity" size={13} color="#4F46E5" />
                   <Text style={styles.sectionHeaderTitle}>AGENT EXECUTION TRACE</Text>
                 </View>
                 <AgentTrajectory steps={issue.trajectory_steps} />
@@ -769,7 +770,7 @@ export default function CodeIssueCard({
             {/* Workflow & History Card */}
             <View style={styles.workflowCard}>
               <View style={styles.workflowHeader}>
-                <Feather name="clock" size={12} color={COLORS.textTertiary} />
+                <Feather name="clock" size={12} color="#71717A" />
                 <Text style={styles.workflowTitle}>ISSUE WORKFLOW LIFECYCLE</Text>
               </View>
 
@@ -824,9 +825,9 @@ export default function CodeIssueCard({
                 ]}
                 onPress={handleOpenGitHub}
               >
-                <Feather name="github" size={14} color="#CBD5E1" />
+                <Feather name="github" size={14} color="#18181B" />
                 <Text style={styles.githubExternalText}>View on GitHub</Text>
-                <Feather name="external-link" size={12} color={COLORS.textTertiary} />
+                <Feather name="external-link" size={12} color="#71717A" />
               </Pressable>
             ) : null}
 
@@ -838,7 +839,7 @@ export default function CodeIssueCard({
               ]}
               onPress={goToFeed}
             >
-              <Feather name="arrow-left" size={13} color={COLORS.primaryLight} />
+              <Feather name="arrow-left" size={13} color="#4F46E5" />
               <Text style={styles.returnToFeedText}>Return to Feed Reel</Text>
             </Pressable>
           </ScrollView>
@@ -873,7 +874,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
     gap: 5,
@@ -885,30 +886,30 @@ const styles = StyleSheet.create({
   },
   ciText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 0.2,
   },
   issueStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.28)',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(5, 150, 105, 0.25)',
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
     gap: 5,
   },
   issueStatusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: '#059669',
   },
   issueStatusText: {
-    color: '#34D399',
+    color: '#059669',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 0.2,
   },
   issueTypePill: {
@@ -916,11 +917,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
   },
   issueTypeText: {
     fontSize: 11,
@@ -931,32 +932,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#F4F0E8',
   },
   branchPillText: {
-    color: '#94A3B8',
+    color: '#4B5563',
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
   },
   metaBullet: {
-    color: COLORS.textTertiary,
+    color: '#A1A1AA',
     fontSize: 12,
   },
   diffScopePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   diffScopeText: {
-    color: '#94A3B8',
+    color: '#4B5563',
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
@@ -968,7 +969,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   repoText: {
-    color: COLORS.textSecondary,
+    color: '#52525B',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -977,12 +978,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   branchText: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
+    color: '#18181B',
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '800',
     marginBottom: 5,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   authorRow: {
     flexDirection: 'row',
@@ -994,29 +995,29 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   authorAvatarPlaceholder: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(79, 70, 229, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    borderColor: 'rgba(79, 70, 229, 0.25)',
   },
   authorInitials: {
-    color: COLORS.primaryLight,
+    color: '#4F46E5',
     fontSize: 9,
     fontWeight: '700',
   },
   authorHandle: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 11,
   },
   authorHandleHighlight: {
-    color: '#CBD5E1',
+    color: '#18181B',
     fontWeight: '600',
   },
   riskRow: {
@@ -1045,32 +1046,39 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(5, 150, 105, 0.25)',
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
     gap: 5,
   },
   issueReadinessText: {
-    color: '#34D399',
+    color: '#059669',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   aiSummaryContainer: {
-    backgroundColor: 'rgba(17, 20, 30, 0.72)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 10,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 12,
     marginBottom: 10,
+    // @ts-ignore
+    backdropFilter: 'blur(20px)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
   },
   aiSummaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   aiSummaryTitle: {
-    color: COLORS.textSecondary,
+    color: '#71717A',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -1079,44 +1087,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   bulletDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: '#4F46E5',
     marginTop: 7,
   },
   bulletText: {
-    color: '#CBD5E1',
+    color: '#27272A',
     fontSize: 12,
     lineHeight: 18,
     flex: 1,
   },
   codeSnippetBox: {
-    backgroundColor: '#0C0E17',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     padding: 10,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   codeSnippetBoxPressed: {
-    borderColor: 'rgba(99, 102, 241, 0.4)',
-    backgroundColor: '#101320',
+    borderColor: 'rgba(79, 70, 229, 0.4)',
+    backgroundColor: '#FBFBFB',
   },
   snippetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
     paddingBottom: 6,
     marginBottom: 6,
   },
   snippetFilename: {
-    color: '#F1F5F9',
+    color: '#18181B',
     fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -1133,22 +1146,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   lineRowAdd: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
   },
   lineRowDel: {
-    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    backgroundColor: 'rgba(225, 29, 72, 0.08)',
   },
   snippetPrefix: {
     width: 14,
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.3)',
   },
   snippetCodeText: {
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#CBD5E1',
     flex: 1,
   },
   snippetFooter: {
@@ -1157,24 +1168,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
     paddingTop: 6,
   },
   snippetFooterText: {
-    color: COLORS.primaryLight,
+    color: '#4F46E5',
     fontSize: 11,
     fontWeight: '600',
   },
   issueDispatchBox: {
-    backgroundColor: '#0C0E17',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     padding: 10,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   issueDescriptionPreview: {
-    color: '#CBD5E1',
+    color: '#3F3F46',
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 8,
@@ -1184,11 +1200,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
     paddingTop: 6,
   },
   detailedPage: {
-    backgroundColor: COLORS.background,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flex: 1,
@@ -1208,32 +1224,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   detailsBackBtnPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#F4F4F5',
   },
   detailsBackText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#CBD5E1',
+    color: '#18181B',
   },
   detailsPill: {
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'rgba(79, 70, 229, 0.2)',
   },
   detailsPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primaryLight,
+    color: '#4F46E5',
     letterSpacing: 0.3,
   },
   detailsMetaRow: {
@@ -1248,7 +1269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
     borderWidth: 1,
   },
@@ -1267,11 +1288,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   detailsTypeText: {
     fontSize: 11,
@@ -1282,14 +1303,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: '#F4F0E8',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   detailsBranchText: {
-    color: '#CBD5E1',
+    color: '#4B5563',
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
@@ -1301,15 +1322,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   detailsRepoText: {
-    color: COLORS.textSecondary,
+    color: '#52525B',
     fontSize: 12,
     fontWeight: '600',
   },
   detailsTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: '#111827',
+    fontSize: 19,
     fontWeight: '800',
-    lineHeight: 24,
+    lineHeight: 25,
     marginBottom: 8,
     letterSpacing: -0.3,
   },
@@ -1324,19 +1345,24 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   detailsAuthorText: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 12,
   },
   detailsDescCard: {
-    backgroundColor: '#0D0F18',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.07)',
     padding: 14,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
   },
   detailsDescHeader: {
     flexDirection: 'row',
@@ -1345,7 +1371,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   detailsDescHeaderTitle: {
-    color: COLORS.textSecondary,
+    color: '#71717A',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -1357,7 +1383,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
   },
   githubLabelBadge: {
     paddingHorizontal: 7,
@@ -1370,12 +1396,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   agentSolverCard: {
-    backgroundColor: 'rgba(15, 18, 28, 0.85)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(79, 70, 229, 0.25)',
     padding: 14,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 3,
   },
   agentSolverHeader: {
     flexDirection: 'row',
@@ -1389,7 +1420,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   agentBadgeText: {
-    color: '#818CF8',
+    color: '#4F46E5',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -1398,9 +1429,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: 'rgba(5, 150, 105, 0.25)',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
@@ -1409,21 +1440,22 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: '#059669',
   },
   agentReadyText: {
-    color: '#34D399',
+    color: '#059669',
     fontSize: 10,
     fontWeight: '700',
   },
   agentSolverHeadline: {
-    color: '#E2E8F0',
+    color: '#18181B',
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
     marginBottom: 12,
+    fontWeight: '500',
   },
   monoHighlight: {
-    color: '#F1F5F9',
+    color: '#111827',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
   },
@@ -1437,7 +1469,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   agentFeatureText: {
-    color: '#94A3B8',
+    color: '#4B5563',
     fontSize: 12,
     flex: 1,
   },
@@ -1449,9 +1481,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
+    backgroundColor: '#18181B',
+    paddingVertical: 11,
     borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   dispatchButtonText: {
     color: '#FFFFFF',
@@ -1464,14 +1501,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
     paddingVertical: 10,
     borderRadius: 10,
   },
   chatDiscussButtonText: {
-    color: '#CBD5E1',
+    color: '#18181B',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1492,18 +1529,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionHeaderTitle: {
-    color: COLORS.textSecondary,
+    color: '#71717A',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   workflowCard: {
-    backgroundColor: '#0C0E17',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    padding: 12,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    padding: 14,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 1,
   },
   workflowHeader: {
     flexDirection: 'row',
@@ -1512,7 +1554,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   workflowTitle: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -1526,19 +1568,19 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
     marginTop: 4,
   },
   stepDotDone: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#059669',
   },
   stepDotActive: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: '#4F46E5',
   },
   stepLine: {
     width: 1,
     height: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginLeft: 3.5,
     marginVertical: 2,
   },
@@ -1546,12 +1588,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    color: '#E2E8F0',
+    color: '#18181B',
     fontSize: 12,
     fontWeight: '600',
   },
   stepSub: {
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontSize: 11,
     marginTop: 1,
   },
@@ -1560,18 +1602,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     paddingVertical: 9,
     borderRadius: 10,
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
   githubExternalBtnPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F4F4F5',
   },
   githubExternalText: {
-    color: '#CBD5E1',
+    color: '#18181B',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1587,7 +1633,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   returnToFeedText: {
-    color: COLORS.primaryLight,
+    color: '#4F46E5',
     fontSize: 12,
     fontWeight: '600',
   },
