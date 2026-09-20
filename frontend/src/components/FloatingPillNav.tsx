@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,8 +7,8 @@ import { COLORS, SPACING } from '../constants/theme';
 
 // Map Expo Router tab route names to icons
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  feed:     'home',
-  sessions: 'zap',
+  feed:     'layers',
+  sessions: 'activity',
   profile:  'user',
 };
 
@@ -16,68 +16,85 @@ export default function FloatingPillNav({ state, navigation }: BottomTabBarProps
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.pill, { bottom: insets.bottom + 16 }]}>
-      {state.routes.map((route, index) => {
-        const isActive = state.index === index;
-        const icon = TAB_ICONS[route.name] ?? 'circle';
+    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom + 12, 20) }]} pointerEvents="box-none">
+      <View style={styles.pill}>
+        {state.routes.map((route, index) => {
+          const isActive = state.index === index;
+          const icon = TAB_ICONS[route.name] ?? 'circle';
 
-        return (
-          <Pressable
-            key={route.key}
-            onPress={() => navigation.navigate(route.name)}
-            style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
-            hitSlop={8}
-          >
-            <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
-              <Feather
-                name={icon}
-                size={18}
-                color={isActive ? COLORS.primary : COLORS.textSecondary}
-              />
-            </View>
-          </Pressable>
-        );
-      })}
+          return (
+            <Pressable
+              key={route.key}
+              onPress={() => navigation.navigate(route.name)}
+              style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
+              hitSlop={8}
+            >
+              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+                <Feather
+                  name={icon}
+                  size={19}
+                  color={isActive ? COLORS.textPrimary : COLORS.textTertiary}
+                />
+                {isActive && <View style={styles.activeDot} />}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  pill: {
+  wrapper: {
     position: 'absolute',
-    alignSelf: 'center',
-    left: 60,
-    right: 60,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: 'rgba(18,18,18,0.97)',
-    borderRadius: 40,
+    zIndex: 99,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(15, 18, 28, 0.88)',
+    borderRadius: 9999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    // @ts-ignore
+    backdropFilter: 'blur(24px)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 16,
+    shadowRadius: 24,
+    elevation: 20,
+    gap: 12,
   },
   item: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: SPACING.xs,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 38,
+    borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   iconWrapActive: {
-    backgroundColor: `${COLORS.primary}18`,
+    backgroundColor: 'rgba(99, 102, 241, 0.18)',
     borderWidth: 1,
-    borderColor: `${COLORS.primary}40`,
+    borderColor: 'rgba(99, 102, 241, 0.35)',
+  },
+  activeDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.primaryLight,
   },
 });
