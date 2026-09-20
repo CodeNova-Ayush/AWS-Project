@@ -279,6 +279,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 210, 255, 0.25)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 210, 255, 0.12)',
+    // @ts-ignore
     backdropFilter: 'blur(16px)',
   },
   appIcon: {
@@ -329,6 +330,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    // @ts-ignore
     backdropFilter: 'blur(8px)',
   },
   modalCard: {

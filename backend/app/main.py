@@ -257,6 +257,28 @@ def create_app() -> FastAPI:
                 return FileResponse(offline_file, media_type="text/html")
             return {"error": "Offline page not found"}
 
+        @app.get("/favicon.ico")
+        async def serve_favicon_ico():
+            ico_file = frontend_dist / "favicon.ico"
+            if ico_file.is_file():
+                return FileResponse(
+                    ico_file,
+                    media_type="image/x-icon",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+            return {"error": "favicon.ico not found"}
+
+        @app.get("/favicon.png")
+        async def serve_favicon_png():
+            png_file = frontend_dist / "favicon.png"
+            if png_file.is_file():
+                return FileResponse(
+                    png_file,
+                    media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+            return {"error": "favicon.png not found"}
+
         @app.get("/{full_path:path}")
         async def serve_spa_app(full_path: str):
             if full_path.startswith("api") or full_path in ["docs", "openapi.json", "redoc", "health"]:
