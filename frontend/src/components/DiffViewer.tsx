@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Platform } from 'react-native';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { DiffLine } from '../constants/types';
 
@@ -83,10 +83,11 @@ const styles = StyleSheet.create({
   langLabel: {
     color: COLORS.textTertiary,
     fontSize: FONT_SIZES.xs,
-    fontFamily: 'Courier New',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginLeft: 'auto',
     textTransform: 'uppercase',
     letterSpacing: 1,
+    fontWeight: '600',
   },
   codeScroll: {
     padding: SPACING.sm,
@@ -96,18 +97,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 2,
     paddingHorizontal: SPACING.xs,
-    borderRadius: 2,
+    borderRadius: 3,
   },
   lineAdd: {
-    backgroundColor: COLORS.successBg,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
   },
   lineDel: {
-    backgroundColor: COLORS.errorBg,
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
   },
   lineNumber: {
     color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.xs,
-    fontFamily: 'Courier New',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     width: 24,
     textAlign: 'right',
     marginRight: SPACING.sm,
@@ -115,15 +116,15 @@ const styles = StyleSheet.create({
   },
   prefix: {
     color: COLORS.textTertiary,
-    fontSize: FONT_SIZES.sm,
-    fontFamily: 'Courier New',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     width: 14,
     fontWeight: '700',
   },
   code: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.xs,
-    fontFamily: 'Courier New',
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     flex: 1,
   },
 });
