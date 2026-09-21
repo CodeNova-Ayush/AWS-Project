@@ -19,12 +19,12 @@ import { fetchSavedIssues, unsaveIssue } from '../../src/services/api';
 import CodeBackground from '../../src/components/CodeBackground';
 
 const TYPE_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; color: string; label: string }> = {
-  bug:         { icon: 'alert-circle', color: COLORS.error,   label: 'Bug Fix' },
-  security:    { icon: 'shield',       color: '#EC4899',      label: 'Security' },
-  performance: { icon: 'zap',          color: COLORS.warning, label: 'Performance' },
-  suggestion:  { icon: 'message-square', color: COLORS.info,  label: 'Suggestion' },
-  refactor:    { icon: 'git-commit',   color: '#A855F7',      label: 'Refactor' },
-  feature:     { icon: 'plus-circle',  color: COLORS.success, label: 'Feature' },
+  bug: { icon: 'alert-circle', color: COLORS.error, label: 'Bug Fix' },
+  security: { icon: 'shield', color: '#EC4899', label: 'Security' },
+  performance: { icon: 'zap', color: COLORS.warning, label: 'Performance' },
+  suggestion: { icon: 'message-square', color: COLORS.info, label: 'Suggestion' },
+  refactor: { icon: 'git-commit', color: '#A855F7', label: 'Refactor' },
+  feature: { icon: 'plus-circle', color: COLORS.success, label: 'Feature' },
 };
 
 export default function BookmarksTabScreen() {
@@ -77,7 +77,7 @@ export default function BookmarksTabScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.bookmarkIconWrap}>
-            <Feather name="bookmark" size={18} color="#00D2FF" />
+            <Feather name="bookmark" size={18} color="#4F46E5" />
           </View>
           <View>
             <Text style={styles.headerTitle}>Bookmarks</Text>
@@ -116,12 +116,12 @@ export default function BookmarksTabScreen() {
       {/* Content */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#00D2FF" />
+          <ActivityIndicator size="large" color="#4F46E5" />
         </View>
       ) : filteredIssues.length === 0 ? (
         <View style={styles.center}>
           <View style={styles.emptyIconCircle}>
-            <Feather name="bookmark" size={36} color="#64748B" />
+            <Feather name="bookmark" size={36} color="#71717A" />
           </View>
           <Text style={styles.emptyTitle}>
             {selectedFilter === 'all' ? 'No bookmarks yet' : `No ${selectedFilter} bookmarks`}
@@ -130,7 +130,7 @@ export default function BookmarksTabScreen() {
             Tap the bookmark icon on any PR card in the feed to save it here for later review.
           </Text>
           <Pressable style={styles.exploreBtn} onPress={() => router.push('/feed')}>
-            <Feather name="layers" size={15} color="#050505" />
+            <Feather name="layers" size={15} color="#FFFFFF" />
             <Text style={styles.exploreBtnText}>Go to PR Feed</Text>
           </Pressable>
         </View>
@@ -144,8 +144,15 @@ export default function BookmarksTabScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor="#00D2FF"
+              tintColor="#4F46E5"
             />
+          }
+          ListFooterComponent={
+            filteredIssues.length > 0 ? (
+              <View style={styles.listFooter}>
+                <Text style={styles.listFooterText}>No more bookmarks</Text>
+              </View>
+            ) : null
           }
           renderItem={({ item }) => {
             const cfg = TYPE_CONFIG[item.type] || TYPE_CONFIG.bug;
@@ -189,13 +196,13 @@ export default function BookmarksTabScreen() {
                 {/* Meta row: Repo & Branch */}
                 <View style={styles.metaRow}>
                   <View style={styles.metaChip}>
-                    <Feather name="github" size={11} color="#94A3B8" />
+                    <Feather name="github" size={11} color="#71717A" />
                     <Text style={styles.metaChipText} numberOfLines={1}>
                       {item.project}
                     </Text>
                   </View>
                   <View style={styles.metaChip}>
-                    <Feather name="git-branch" size={11} color="#94A3B8" />
+                    <Feather name="git-branch" size={11} color="#71717A" />
                     <Text style={styles.metaChipText} numberOfLines={1}>
                       {item.branch}
                     </Text>
@@ -212,18 +219,18 @@ export default function BookmarksTabScreen() {
                       style={styles.sessionBtn}
                       onPress={() => router.push(`/session/${item.agent_job_id}`)}
                     >
-                      <Feather name="activity" size={13} color="#00D2FF" />
+                      <Feather name="activity" size={13} color="#4F46E5" />
                       <Text style={styles.sessionBtnText}>View Agent Session</Text>
-                      <Feather name="arrow-right" size={12} color="#00D2FF" />
+                      <Feather name="arrow-right" size={12} color="#4F46E5" />
                     </Pressable>
                   ) : null}
 
                   {item.github_pr_url ? (
                     <Pressable
                       style={styles.githubBtn}
-                      onPress={() => Linking.openURL(item.github_pr_url!).catch(() => {})}
+                      onPress={() => Linking.openURL(item.github_pr_url!).catch(() => { })}
                     >
-                      <Feather name="external-link" size={13} color="#CBD5E1" />
+                      <Feather name="external-link" size={13} color="#52525B" />
                       <Text style={styles.githubBtnText}>Open GitHub</Text>
                     </Pressable>
                   ) : null}
@@ -240,7 +247,7 @@ export default function BookmarksTabScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050505',
+    backgroundColor: '#FAF8F5',
   },
   header: {
     flexDirection: 'row',
@@ -249,7 +256,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -260,33 +267,35 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(0, 210, 255, 0.1)',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 210, 255, 0.25)',
+    borderColor: 'rgba(79, 70, 229, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#18181B',
+    letterSpacing: -0.4,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#71717A',
     marginTop: 1,
   },
   countPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 70, 229, 0.2)',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 999,
   },
   countPillText: {
     fontSize: 12,
-    color: '#CBD5E1',
-    fontWeight: '600',
+    color: '#4F46E5',
+    fontWeight: '700',
   },
   filterRow: {
     flexDirection: 'row',
@@ -298,21 +307,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   filterChipActive: {
-    backgroundColor: 'rgba(0, 210, 255, 0.15)',
-    borderColor: '#00D2FF',
+    backgroundColor: '#18181B',
+    borderColor: '#18181B',
   },
   filterChipText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#71717A',
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: '#00D2FF',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   listContent: {
     paddingHorizontal: 16,
@@ -321,13 +335,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: 'rgba(18, 24, 38, 0.85)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     borderLeftWidth: 3,
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -353,14 +371,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   langBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#FAF8F5',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   langText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#52525B',
     fontFamily: 'monospace',
   },
   unsaveBtn: {
@@ -369,13 +389,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#18181B',
     lineHeight: 20,
     marginBottom: 6,
   },
   cardDesc: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#52525B',
     lineHeight: 18,
     marginBottom: 12,
   },
@@ -390,21 +410,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: '#FAF8F5',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     maxWidth: 160,
   },
   metaChipText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#52525B',
   },
   prNumText: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#71717A',
     fontWeight: '600',
   },
   cardFooter: {
@@ -412,39 +432,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
     paddingTop: 10,
   },
   sessionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 210, 255, 0.1)',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 210, 255, 0.25)',
+    borderColor: 'rgba(79, 70, 229, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   sessionBtnText: {
     fontSize: 12,
-    color: '#00D2FF',
+    color: '#4F46E5',
     fontWeight: '600',
   },
   githubBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   githubBtnText: {
     fontSize: 12,
-    color: '#CBD5E1',
+    color: '#18181B',
     fontWeight: '600',
   },
   center: {
@@ -457,22 +477,27 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#18181B',
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#71717A',
     textAlign: 'center',
     lineHeight: 19,
     maxWidth: 300,
@@ -482,14 +507,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#00D2FF',
+    backgroundColor: '#18181B',
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   exploreBtnText: {
     fontSize: 13,
-    color: '#050505',
+    color: '#FFFFFF',
     fontWeight: '700',
+  },
+  listFooter: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listFooterText: {
+    fontSize: 12,
+    color: '#71717A',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });
