@@ -200,7 +200,14 @@ export async function approvePR(issueId: string): Promise<void> {
     headers,
     credentials: 'include'
   });
-  if (!res.ok) throw new Error('Failed to approve PR');
+  if (!res.ok) {
+    let msg = 'Failed to approve PR';
+    try {
+      const data = await res.json();
+      msg = data.detail || data.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
 }
 
 export async function rejectPR(issueId: string, comment?: string): Promise<void> {
@@ -211,7 +218,14 @@ export async function rejectPR(issueId: string, comment?: string): Promise<void>
     credentials: 'include',
     body: JSON.stringify({ comment: comment || 'Changes requested via MergeDeck' }),
   });
-  if (!res.ok) throw new Error('Failed to reject PR');
+  if (!res.ok) {
+    let msg = 'Failed to request changes';
+    try {
+      const data = await res.json();
+      msg = data.detail || data.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
 }
 
 export async function mergePR(
@@ -230,7 +244,14 @@ export async function mergePR(
       commit_message: 'Merged via MergeDeck',
     }),
   });
-  if (!res.ok) throw new Error('Failed to merge PR');
+  if (!res.ok) {
+    let msg = 'Failed to merge PR';
+    try {
+      const data = await res.json();
+      msg = data.detail || data.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
 }
 
 export async function mergeAllPRs(
@@ -244,7 +265,14 @@ export async function mergeAllPRs(
     credentials: 'include',
     body: JSON.stringify({ issue_ids: issueIds, merge_method: mergeMethod }),
   });
-  if (!res.ok) throw new Error('Failed to bulk merge PRs');
+  if (!res.ok) {
+    let msg = 'Failed to bulk merge PRs';
+    try {
+      const data = await res.json();
+      msg = data.detail || data.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
   return res.json();
 }
 

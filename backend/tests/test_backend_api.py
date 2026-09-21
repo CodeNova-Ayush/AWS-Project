@@ -296,3 +296,36 @@ class TestDataValidation:
             assert "_id" not in issue
         
         print(f"✓ No MongoDB _id in responses")
+
+
+class TestPRActions:
+    """Test PR action endpoints (approve, reject, merge)."""
+
+    def test_pr_actions_require_auth(self, base_url, api_client):
+        """PR action endpoints require authentication."""
+        for endpoint in ["approve", "reject", "merge"]:
+            resp = api_client.post(f"{base_url}/api/prs/gh_pr_owner_repo_1/{endpoint}")
+            assert resp.status_code == 401, f"{endpoint} should require auth"
+            assert "detail" in resp.json()
+
+    @pytest.mark.anyio
+    async def test_pr_id_resolver(self):
+        """Verify _resolve_pr_info parses different valid formats."""
+        from app.services.pr_service import _resolve_pr_info
+        
+        # Standard gh_pr_ format
+        owner, repo, num = await _resolve_pr_info("gh_pr_CodeNova-Ayush_AWS-Project_10")
+        assert owner == "CodeNova-Ayush"
+        assert repo == "AWS-Project"
+        assert num == 10
+
+        # With underscores in repo
+        owner, repo, num = await _resolve_pr_info("gh_pr_octocat_hello_world_repo_42")
+        assert owner == "octocat"
+        assert repo == "hello_world_repo"
+        assert num == 42
+
+        # Invalid format
+        with pytest.raises(ValueError):
+            await _resolve_pr_info("invalid_format_pr")
+

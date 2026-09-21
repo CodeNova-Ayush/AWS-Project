@@ -364,17 +364,66 @@ async def fetch_org_issues(
     return sorted(result, key=lambda x: x.get("created_at", ""), reverse=True)
 
 
+async def _resolve_pr_info(
+    issue_id: str, db: Optional[AsyncIOMotorDatabase] = None
+) -> tuple[str, str, int]:
+    """Resolve (owner, repo, pr_number) from issue_id or DB lookup."""
+    # 1. DB lookup if db instance provided
+    if db is not None:
+        try:
+            doc = await db.issues.find_one({"issue_id": issue_id})
+            if doc:
+                owner = doc.get("github_owner")
+                repo = doc.get("github_repo")
+                pr_num = doc.get("github_pr_number") or doc.get("github_issue_number")
+                if owner and repo and pr_num:
+                    return str(owner), str(repo), int(pr_num)
+        except Exception as exc:
+            logger.warning("DB lookup failed in _resolve_pr_info: %s", exc)
+
+    # 2. String parsing for standard gh_pr_ or gh_issue_ prefix
+    if issue_id.startswith("gh_pr_") or issue_id.startswith("gh_issue_"):
+        clean = issue_id.replace("gh_pr_", "").replace("gh_issue_", "")
+        parts = clean.split("_")
+        if len(parts) >= 3:
+            owner = parts[0]
+            try:
+                pr_number = int(parts[-1])
+                repo = "_".join(parts[1:-1])
+                return owner, repo, pr_number
+            except ValueError:
+                pass
+
+    # 3. String parsing for owner/repo format
+    if "/" in issue_id:
+        parts = issue_id.strip("/").split("/")
+        if len(parts) >= 3:
+            owner = parts[0]
+            repo = parts[1]
+            try:
+                pr_number = int(parts[-1])
+                return owner, repo, pr_number
+            except ValueError:
+                pass
+
+    # 4. Fallback to classic _parse_issue_id if it matches
+    return _parse_issue_id(issue_id)
+
+
 def _parse_issue_id(issue_id: str):
     """Parse gh_pr_{owner}_{repo}_{pr_number} → (owner, repo, pr_number)."""
     if not issue_id.startswith("gh_pr_"):
         raise ValueError(
-            "Invalid issue_id format. Expected: gh_pr_{owner}_{repo}_{pr_number}"
+            f"Invalid issue_id format '{issue_id}'. Expected: gh_pr_{{owner}}_{{repo}}_{{pr_number}}"
         )
     parts = issue_id.replace("gh_pr_", "").split("_")
     if len(parts) < 3:
-        raise ValueError("Not enough parts in issue_id")
+        raise ValueError(f"Not enough parts in issue_id '{issue_id}'")
     owner = parts[0]
-    pr_number = int(parts[-1])
+    try:
+        pr_number = int(parts[-1])
+    except ValueError:
+        raise ValueError(f"Invalid PR number in issue_id '{issue_id}'")
     repo = "_".join(parts[1:-1])
     return owner, repo, pr_number
 
@@ -387,9 +436,11 @@ def _github_headers(token: str) -> dict:
     }
 
 
-async def approve_pr(issue_id: str, token: str) -> dict:
-    owner, repo, pr_number = _parse_issue_id(issue_id)
-    async with httpx.AsyncClient() as client:
+async def approve_pr(
+    issue_id: str, token: str, db: Optional[AsyncIOMotorDatabase] = None
+) -> dict:
+    owner, repo, pr_number = await _resolve_pr_info(issue_id, db)
+    async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
             headers=_github_headers(token),
@@ -406,10 +457,13 @@ async def approve_pr(issue_id: str, token: str) -> dict:
 
 
 async def reject_pr(
-    issue_id: str, token: str, comment: str = "Changes requested via MergeDeck"
+    issue_id: str,
+    token: str,
+    comment: str = "Changes requested via MergeDeck",
+    db: Optional[AsyncIOMotorDatabase] = None,
 ) -> dict:
-    owner, repo, pr_number = _parse_issue_id(issue_id)
-    async with httpx.AsyncClient() as client:
+    owner, repo, pr_number = await _resolve_pr_info(issue_id, db)
+    async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
             headers=_github_headers(token),
@@ -431,12 +485,13 @@ async def merge_pr(
     commit_title: str = "",
     commit_message: str = "Merged via MergeDeck",
     merge_method: str = "merge",
+    db: Optional[AsyncIOMotorDatabase] = None,
 ) -> dict:
-    owner, repo, pr_number = _parse_issue_id(issue_id)
+    owner, repo, pr_number = await _resolve_pr_info(issue_id, db)
     payload = {"commit_message": commit_message, "merge_method": merge_method}
     if commit_title:
         payload["commit_title"] = commit_title
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.put(
             f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge",
             headers=_github_headers(token),

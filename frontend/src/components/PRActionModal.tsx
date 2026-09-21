@@ -67,6 +67,7 @@ export default function PRActionModal({
   const [rejectComment, setRejectComment] = useState('');
   const [mergeMethod, setMergeMethod] = useState<MergeMethod>('squash');
   const [commitTitle, setCommitTitle] = useState('');
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const slideAnim = useRef(new Animated.Value(400)).current;
 
@@ -79,6 +80,7 @@ export default function PRActionModal({
       setRejectComment('');
       setMergeMethod('merge');
       setCommitTitle('');
+      setErrorText(null);
 
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -88,11 +90,13 @@ export default function PRActionModal({
       }).start();
     } else {
       slideAnim.setValue(400);
+      setErrorText(null);
     }
   }, [visible]);
 
   async function handleCTA() {
     setLoading(true);
+    setErrorText(null);
     try {
       if (mode === 'approve') {
         if (onApprove) await onApprove();
@@ -103,9 +107,9 @@ export default function PRActionModal({
       }
       onSuccess?.();
       onClose();
-    } catch (err) {
-      // Leave modal open on error — parent should show error toast
-      // Re-throw so the parent's execute* handlers can optionally show their own toast
+    } catch (err: any) {
+      // Keep modal open so user sees why the action failed on GitHub
+      setErrorText(err?.message || 'Operation failed on GitHub. Please check branch protections or permissions.');
     } finally {
       setLoading(false);
     }
@@ -229,6 +233,13 @@ export default function PRActionModal({
 
           {/* CTA Button & Cancel */}
           <View style={{ gap: 10, marginTop: SPACING.md }}>
+            {errorText && (
+              <View style={styles.errorContainer}>
+                <Feather name="alert-circle" size={16} color="#E11D48" style={{ marginTop: 2 }} />
+                <Text style={styles.errorTextBanner}>{errorText}</Text>
+              </View>
+            )}
+
             <Pressable
               style={[styles.cta, { backgroundColor: cfg.color }, loading && styles.ctaDisabled]}
               onPress={handleCTA}
@@ -466,5 +477,23 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(225, 29, 72, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(225, 29, 72, 0.25)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    gap: 8,
+    marginBottom: 4,
+  },
+  errorTextBanner: {
+    flex: 1,
+    fontSize: FONT_SIZES.sm,
+    color: '#E11D48',
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });

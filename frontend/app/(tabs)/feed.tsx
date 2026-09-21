@@ -70,6 +70,8 @@ export default function FeedScreen() {
   // PR action modal state
   const [prModalVisible, setPrModalVisible] = useState(false);
   const [prModalMode, setPrModalMode] = useState<PRActionMode>('approve');
+  const [selectedPRIssue, setSelectedPRIssue] = useState<CodeIssue | null>(null);
+  const [chatIssue, setChatIssue] = useState<CodeIssue | null>(null);
 
   useEffect(() => {
     loadData();
@@ -193,12 +195,9 @@ export default function FeedScreen() {
   function handleChat(targetIssue?: CodeIssue) {
     const issueToUse = targetIssue || currentIssue;
     if (!issueToUse) return;
-    if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to chat with AI.');
-      return;
-    }
     const idx = issues.findIndex((i) => i.issue_id === issueToUse.issue_id);
     if (idx !== -1) setCurrentIndex(idx);
+    setChatIssue(issueToUse);
     setChatVisible(true);
   }
 
@@ -229,62 +228,74 @@ export default function FeedScreen() {
   }
 
   function handleApprovePR() {
-    if (!currentIssue) return;
+    const target = currentIssue;
+    if (!target) return;
+    setSelectedPRIssue(target);
     setPrModalMode('approve');
     setPrModalVisible(true);
   }
 
   function handleRejectPR() {
-    if (!currentIssue) return;
+    const target = currentIssue;
+    if (!target) return;
+    setSelectedPRIssue(target);
     setPrModalMode('reject');
     setPrModalVisible(true);
   }
 
   function handleMergePR() {
-    if (!currentIssue) return;
+    const target = currentIssue;
+    if (!target) return;
+    setSelectedPRIssue(target);
     setPrModalMode('merge');
     setPrModalVisible(true);
   }
 
-  function removeCurrentPR() {
-    if (!currentIssue) return;
-    const removedId = currentIssue.issue_id;
-    setIssues(prev => prev.filter(i => i.issue_id !== removedId));
+  function removePR(issueId?: string) {
+    const targetId = issueId || selectedPRIssue?.issue_id || currentIssue?.issue_id;
+    if (!targetId) return;
+    setIssues(prev => prev.filter(i => i.issue_id !== targetId));
   }
 
   async function executePRApprove() {
-    if (!currentIssue) return;
+    const target = selectedPRIssue || currentIssue;
+    if (!target) return;
     try {
-      await approvePR(currentIssue.issue_id);
-      removeCurrentPR();
-      showToast('PR approved!', 'success');
-    } catch {
-      showToast('Failed to approve PR', 'error');
-      throw new Error('approve failed');
+      await approvePR(target.issue_id);
+      removePR(target.issue_id);
+      showToast('PR approved on GitHub!', 'success');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to approve PR on GitHub';
+      showToast(msg, 'error');
+      throw err;
     }
   }
 
   async function executePRReject(comment: string) {
-    if (!currentIssue) return;
+    const target = selectedPRIssue || currentIssue;
+    if (!target) return;
     try {
-      await rejectPR(currentIssue.issue_id, comment);
-      removeCurrentPR();
-      showToast('Changes requested', 'info');
-    } catch {
-      showToast('Failed to request changes', 'error');
-      throw new Error('reject failed');
+      await rejectPR(target.issue_id, comment);
+      removePR(target.issue_id);
+      showToast('Changes requested on GitHub', 'info');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to request changes on GitHub';
+      showToast(msg, 'error');
+      throw err;
     }
   }
 
   async function executePRMerge(method: MergeMethod, commitTitle: string) {
-    if (!currentIssue) return;
+    const target = selectedPRIssue || currentIssue;
+    if (!target) return;
     try {
-      await mergePR(currentIssue.issue_id, method, commitTitle);
-      removeCurrentPR();
-      showToast('PR merged!', 'success');
-    } catch {
-      showToast('Failed to merge PR', 'error');
-      throw new Error('merge failed');
+      await mergePR(target.issue_id, method, commitTitle);
+      removePR(target.issue_id);
+      showToast('PR successfully merged on GitHub!', 'success');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to merge PR on GitHub';
+      showToast(msg, 'error');
+      throw err;
     }
   }
 
@@ -513,12 +524,15 @@ export default function FeedScreen() {
       )}
 
       {/* AI Chat Sheet */}
-      {currentIssue && (
+      {(chatIssue || currentIssue) && (
         <AIChatSheet
-          issueId={currentIssue.issue_id}
-          issue={currentIssue}
+          issueId={(chatIssue || currentIssue)!.issue_id}
+          issue={(chatIssue || currentIssue)!}
           visible={chatVisible}
-          onClose={() => setChatVisible(false)}
+          onClose={() => {
+            setChatVisible(false);
+            setChatIssue(null);
+          }}
         />
       )}
 
@@ -548,22 +562,21 @@ export default function FeedScreen() {
       />
 
       {/* PR Action Modal */}
-      {currentIssue && (
+      {(selectedPRIssue || currentIssue) && (
         <PRActionModal
           visible={prModalVisible}
           mode={prModalMode}
-          prTitle={currentIssue.title}
-          prNumber={currentIssue.github_pr_number || 2}
-          onClose={() => setPrModalVisible(false)}
+          prTitle={(selectedPRIssue || currentIssue)!.title}
+          prNumber={(selectedPRIssue || currentIssue)!.github_pr_number || 2}
+          baseBranch={(selectedPRIssue || currentIssue)!.base_branch || 'main'}
+          onClose={() => {
+            setPrModalVisible(false);
+            setSelectedPRIssue(null);
+          }}
+          onApprove={executePRApprove}
+          onReject={executePRReject}
+          onMerge={executePRMerge}
           onSuccess={() => {
-            showToast(
-              prModalMode === 'approve'
-                ? 'PR approved!'
-                : prModalMode === 'reject'
-                ? 'Changes requested!'
-                : 'PR merged!',
-              'success'
-            );
             handleForceReload();
           }}
         />
