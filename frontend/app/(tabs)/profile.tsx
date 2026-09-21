@@ -130,8 +130,8 @@ export default function ProfileScreen() {
   const [savingKeys, setSavingKeys] = useState(false);
   const [keyStatus, setKeyStatus] = useState<UserKeysStatus>({
     providers: {},
-    active_provider: 'groq',
-    active_model: 'llama-3.3-70b-versatile',
+    active_provider: '',
+    active_model: '',
     has_openai_key: false,
     has_anthropic_key: false,
   });
@@ -206,11 +206,13 @@ export default function ProfileScreen() {
         setUser(data);
         const status = await getUserKeyStatus();
         setKeyStatus(status);
-        const initialProvider = status.active_provider || 'groq';
-        setSelectedProviderId(initialProvider);
-        const preset = PROVIDER_PRESETS.find((p) => p.id === initialProvider);
-        setModelInput(status.providers?.[initialProvider]?.model || preset?.defaultModel || '');
-        setBaseUrlInput(status.providers?.[initialProvider]?.base_url || preset?.defaultBaseUrl || '');
+        const configuredId = (status.active_provider && status.providers?.[status.active_provider]?.configured)
+          ? status.active_provider
+          : (Object.keys(status.providers || {}).find((k) => status.providers[k]?.configured) || 'groq');
+        setSelectedProviderId(configuredId);
+        const preset = PROVIDER_PRESETS.find((p) => p.id === configuredId);
+        setModelInput(status.providers?.[configuredId]?.model || preset?.defaultModel || '');
+        setBaseUrlInput(status.providers?.[configuredId]?.base_url || preset?.defaultBaseUrl || '');
       }
     } catch {
       /* ignore */
@@ -254,6 +256,11 @@ export default function ProfileScreen() {
   }
 
   async function handleSetActive(pId: string) {
+    const isConfigured = !!keyStatus.providers?.[pId]?.configured;
+    if (!isConfigured) {
+      showToast('Please enter and save an API key first before activating this engine', 'error');
+      return;
+    }
     try {
       const currentModel = keyStatus.providers?.[pId]?.model || PROVIDER_PRESETS.find((p) => p.id === pId)?.defaultModel || '';
       await setActiveProvider(pId, currentModel);
@@ -261,8 +268,8 @@ export default function ProfileScreen() {
       setKeyStatus(updatedStatus);
       const pName = PROVIDER_PRESETS.find((p) => p.id === pId)?.name || pId;
       showToast(`Switched active engine to ${pName}`, 'success');
-    } catch {
-      showToast('Failed to switch active provider', 'error');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to switch active provider', 'error');
     }
   }
 
@@ -299,8 +306,13 @@ export default function ProfileScreen() {
 
   const currentPreset = PROVIDER_PRESETS.find((p) => p.id === selectedProviderId) || PROVIDER_PRESETS[0];
   const isSelectedConfigured = !!keyStatus.providers?.[selectedProviderId]?.configured;
-  const isSelectedActive = keyStatus.active_provider === selectedProviderId;
-  const activePreset = PROVIDER_PRESETS.find((p) => p.id === keyStatus.active_provider) || PROVIDER_PRESETS[0];
+  const isSelectedActive = isSelectedConfigured && keyStatus.active_provider === selectedProviderId;
+  const hasActiveEngine = Boolean(
+    keyStatus.active_provider && keyStatus.providers?.[keyStatus.active_provider]?.configured
+  );
+  const activePreset = hasActiveEngine
+    ? (PROVIDER_PRESETS.find((p) => p.id === keyStatus.active_provider) || null)
+    : null;
 
   if (loading) {
     return (
@@ -370,24 +382,43 @@ export default function ProfileScreen() {
             </View>
 
             {/* ── Active AI Engine Banner ── */}
-            <View style={styles.activeEngineCard}>
-              <View style={styles.activeEngineTop}>
-                <View style={styles.activePill}>
-                  <View style={styles.activePillDot} />
-                  <Text style={styles.activePillText}>ACTIVE AI ENGINE</Text>
+            {hasActiveEngine && activePreset ? (
+              <View style={styles.activeEngineCard}>
+                <View style={styles.activeEngineTop}>
+                  <View style={styles.activePill}>
+                    <View style={styles.activePillDot} />
+                    <Text style={styles.activePillText}>ACTIVE AI ENGINE</Text>
+                  </View>
+                  <View style={styles.activeProviderTag}>
+                    <Feather name={activePreset.icon as any} size={13} color={activePreset.color} />
+                    <Text style={styles.activeProviderName}>{activePreset.name}</Text>
+                  </View>
                 </View>
-                <View style={styles.activeProviderTag}>
-                  <Feather name={activePreset.icon as any} size={13} color={activePreset.color} />
-                  <Text style={styles.activeProviderName}>{activePreset.name}</Text>
-                </View>
+                <Text style={styles.activeModelText}>
+                  Model: <Text style={styles.activeModelHighlight}>{keyStatus.active_model || activePreset.defaultModel || 'Default'}</Text>
+                </Text>
+                <Text style={styles.activeHintText}>
+                  Powers code review AI chat, PR reasoning analysis, and autonomous background agent workflows.
+                </Text>
               </View>
-              <Text style={styles.activeModelText}>
-                Model: <Text style={styles.activeModelHighlight}>{keyStatus.active_model || activePreset.defaultModel || 'Default'}</Text>
-              </Text>
-              <Text style={styles.activeHintText}>
-                Powers code review AI chat, PR reasoning analysis, and autonomous background agent workflows.
-              </Text>
-            </View>
+            ) : (
+              <View style={styles.inactiveEngineCard}>
+                <View style={styles.activeEngineTop}>
+                  <View style={styles.inactivePill}>
+                    <View style={styles.inactivePillDot} />
+                    <Text style={styles.inactivePillText}>NO ACTIVE ENGINE</Text>
+                  </View>
+                  <View style={styles.inactiveProviderTag}>
+                    <Feather name="shield-off" size={13} color="#71717A" />
+                    <Text style={styles.inactiveProviderName}>No Key Configured</Text>
+                  </View>
+                </View>
+                <Text style={styles.inactiveEngineTitle}>Bring Your Own Key (BYOK)</Text>
+                <Text style={styles.activeHintText}>
+                  No AI engine is active by default. Enter your API key below and save it to activate AI features (code review chat, PR reasoning, and background agents).
+                </Text>
+              </View>
+            )}
 
             {/* ── API Keys / Multi-Provider Section ── */}
             <View style={styles.sectionHeader}>
@@ -404,7 +435,7 @@ export default function ProfileScreen() {
             >
               {PROVIDER_PRESETS.map((p) => {
                 const isConfigured = !!keyStatus.providers?.[p.id]?.configured;
-                const isActive = keyStatus.active_provider === p.id;
+                const isActive = isConfigured && keyStatus.active_provider === p.id;
                 const isSelected = selectedProviderId === p.id;
 
                 return (
@@ -995,6 +1026,60 @@ const styles = StyleSheet.create({
     marginTop: 14,
     gap: 7,
     ...SHADOWS.sm,
+  },
+  inactiveEngineCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 16,
+    marginTop: 14,
+    gap: 7,
+    ...SHADOWS.sm,
+  },
+  inactivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(113, 113, 122, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(113, 113, 122, 0.2)',
+  },
+  inactivePillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#71717A',
+  },
+  inactivePillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#71717A',
+    letterSpacing: 0.5,
+  },
+  inactiveProviderTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  inactiveProviderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#71717A',
+  },
+  inactiveEngineTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
   activeEngineTop: {
     flexDirection: 'row',

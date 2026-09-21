@@ -87,7 +87,12 @@ async def set_active_provider_endpoint(
 ):
     """Switch the user's active LLM provider and model."""
     user = await require_user(request, db)
-    await key_service.set_active_provider(db, user["user_id"], body.provider, body.model or "")
+    success = await key_service.set_active_provider(db, user["user_id"], body.provider, body.model or "")
+    if not success and body.provider:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot activate {body.provider.capitalize()}: please enter and save an API key first.",
+        )
     return {
         "message": f"Active provider set to {body.provider}",
         "active_provider": body.provider,

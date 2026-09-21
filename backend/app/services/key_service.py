@@ -109,21 +109,40 @@ async def save_provider_key(
     )
 
 
-async def set_active_provider(db, user_id: str, provider: str, model: str = "") -> None:
-    """Set the user's active provider and model for AI generation."""
+async def set_active_provider(db, user_id: str, provider: str, model: str = "") -> bool:
+    """Set the user's active provider and model for AI generation. Only allowed if configured."""
     provider = provider.lower().strip()
+    if not provider:
+        await db.user_keys.update_one(
+            {"user_id": user_id},
+            {"$set": {"active_provider": "", "active_model": ""}},
+            upsert=True,
+        )
+        return True
+
+    doc = await db.user_keys.find_one({"user_id": user_id}) or {}
+    providers = doc.get("providers", {})
+    p_data = providers.get(provider, {})
+    has_key = bool(p_data.get("api_key_enc"))
+    if not has_key:
+        if provider == "openai" and doc.get("openai_key_enc"):
+            has_key = True
+        elif provider == "anthropic" and doc.get("anthropic_key_enc"):
+            has_key = True
+
+    if not has_key:
+        return False
+
     preset = DEFAULT_PROVIDER_CONFIGS.get(provider, {})
-    resolved_model = model.strip() or preset.get("default_model", "")
+    resolved_model = model.strip() or p_data.get("model") or preset.get("default_model", "")
 
-    update: Dict[str, Any] = {"active_provider": provider}
-    if resolved_model:
-        update["active_model"] = resolved_model
-
+    update: Dict[str, Any] = {"active_provider": provider, "active_model": resolved_model}
     await db.user_keys.update_one(
         {"user_id": user_id},
         {"$set": update},
         upsert=True,
     )
+    return True
 
 
 async def delete_provider_key(db, user_id: str, provider: str) -> None:
@@ -163,20 +182,29 @@ async def get_provider_config(db, user_id: str, provider: Optional[str] = None) 
 
     target_provider = (provider or doc.get("active_provider") or "").lower().strip()
 
-    # If no specific provider was requested and target is not in providers, find first configured
-    if not provider and (not target_provider or target_provider not in providers):
-        if "openai_key_enc" in doc or "openai" in providers:
+    # If no specific provider was requested and target is not configured, find first configured
+    if not target_provider or (target_provider not in providers and not doc.get(f"{target_provider}_key_enc")):
+        configured = [p for p, data in providers.items() if data.get("api_key_enc")]
+        if configured:
+            target_provider = configured[0]
+        elif doc.get("openai_key_enc"):
             target_provider = "openai"
-        elif "anthropic_key_enc" in doc or "anthropic" in providers:
+        elif doc.get("anthropic_key_enc"):
             target_provider = "anthropic"
-        elif providers:
-            target_provider = next(iter(providers))
         elif os.environ.get("OPENAI_API_KEY"):
             target_provider = "openai"
         elif os.environ.get("ANTHROPIC_API_KEY"):
             target_provider = "anthropic"
         else:
-            target_provider = "openai"
+            target_provider = ""
+
+    if not target_provider:
+        return {
+            "provider": "",
+            "api_key": "",
+            "base_url": "",
+            "model": "",
+        }
 
     preset = DEFAULT_PROVIDER_CONFIGS.get(target_provider, {})
     p_data = providers.get(target_provider, {})
@@ -253,8 +281,16 @@ async def get_user_providers_status(db, user_id: str) -> Dict[str, Any]:
                 "model": p_data.get("model", ""),
             }
 
-    active_provider = doc.get("active_provider") or ("openai" if status_map.get("openai", {}).get("configured") else next((p for p, d in status_map.items() if d.get("configured")), "openai"))
-    active_model = doc.get("active_model") or status_map.get(active_provider, {}).get("model", "")
+    raw_active = doc.get("active_provider") or ""
+    if raw_active and status_map.get(raw_active, {}).get("configured"):
+        active_provider = raw_active
+    else:
+        # Fall back to first configured provider if any; otherwise NO active provider by default
+        active_provider = next((p for p, d in status_map.items() if d.get("configured")), "")
+
+    active_model = ""
+    if active_provider:
+        active_model = doc.get("active_model") or status_map.get(active_provider, {}).get("model", "")
 
     return {
         "providers": status_map,
