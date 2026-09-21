@@ -1,6 +1,7 @@
 """Auth routes — GitHub OAuth, session management, /me, /logout."""
 
 import logging
+from typing import Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
