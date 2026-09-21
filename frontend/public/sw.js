@@ -3,7 +3,7 @@
  * Provides offline resilience, smart asset caching, and fast loading.
  */
 
-const CACHE_NAME = 'mergedeck-pwa-v1';
+const CACHE_NAME = 'mergedeck-pwa-v5';
 
 const PRECACHE_ASSETS = [
   '/',

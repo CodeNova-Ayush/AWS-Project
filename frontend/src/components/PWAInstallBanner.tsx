@@ -18,6 +18,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+const appIconSource = require('../../assets/images/icon.png');
+
 export default function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOS, setIsIOS] = useState(false);
@@ -168,7 +170,7 @@ export default function PWAInstallBanner() {
       >
         <View style={styles.card}>
           <Image
-            source={{ uri: '/icons/icon-192.png' }}
+            source={appIconSource}
             style={styles.appIcon}
           />
 
@@ -213,7 +215,7 @@ export default function PWAInstallBanner() {
             <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={{ uri: '/icons/icon-192.png' }} style={{ width: 28, height: 28, borderRadius: 6 }} />
+                  <Image source={appIconSource} style={{ width: 28, height: 28, borderRadius: 6 }} />
                   <Text style={styles.modalTitle}>Install MergeDeck App</Text>
                 </View>
                 <Pressable onPress={() => setShowModal(false)} hitSlop={8}>

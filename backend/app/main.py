@@ -246,7 +246,7 @@ def create_app() -> FastAPI:
                 return FileResponse(
                     manifest_file,
                     media_type="application/manifest+json",
-                    headers={"Cache-Control": "public, max-age=3600"},
+                    headers={"Cache-Control": "no-cache, must-revalidate"},
                 )
             return {"error": "Manifest not found"}
 
@@ -264,7 +264,7 @@ def create_app() -> FastAPI:
                 return FileResponse(
                     ico_file,
                     media_type="image/x-icon",
-                    headers={"Cache-Control": "public, max-age=86400"},
+                    headers={"Cache-Control": "no-cache, must-revalidate"},
                 )
             return {"error": "favicon.ico not found"}
 
@@ -275,9 +275,20 @@ def create_app() -> FastAPI:
                 return FileResponse(
                     png_file,
                     media_type="image/png",
-                    headers={"Cache-Control": "public, max-age=86400"},
+                    headers={"Cache-Control": "no-cache, must-revalidate"},
                 )
             return {"error": "favicon.png not found"}
+
+        @app.api_route("/icons/{icon_name:path}", methods=["GET", "HEAD"])
+        async def serve_icon(icon_name: str):
+            icon_file = frontend_dist / "icons" / icon_name
+            if icon_file.is_file():
+                return FileResponse(
+                    icon_file,
+                    media_type="image/png",
+                    headers={"Cache-Control": "no-cache, must-revalidate"},
+                )
+            return {"error": "Icon not found"}
 
         @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
         async def serve_spa_app(full_path: str):

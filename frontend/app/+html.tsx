@@ -23,7 +23,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
 
         {/* PWA Manifest */}
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/manifest.json?v=5" />
 
         {/* Chrome, Firefox OS and Opera theme color */}
         <meta name="theme-color" content="#050505" />
@@ -33,17 +33,17 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="MergeDeck" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=5" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=5" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png?v=5" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png?v=5" />
 
         {/* Standard Favicons */}
-        <link rel="shortcut icon" href="/favicon.ico?v=3" />
-        <link rel="icon" type="image/x-icon" href="/favicon.ico?v=3" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=3" />
-        <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=3" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
+        <link rel="shortcut icon" href="/favicon.ico?v=5" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico?v=5" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=5" />
+        <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=5" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=5" />
 
         {/* Service Worker Registration */}
         <script
@@ -51,7 +51,7 @@ export default function Root({ children }: PropsWithChildren) {
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                  navigator.serviceWorker.register('/sw.js?v=5', { scope: '/' })
                     .then(function(reg) {
                       console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
                     })
