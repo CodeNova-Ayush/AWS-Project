@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     emergent_llm_key: str = ""
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    groq_api_key: str = ""
     fernet_secret_key: str = ""
 
     # GitHub OAuth & User
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     github_app_installation_id: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=str(_ROOT_DIR / ".env"),
+        env_file=(str(_ROOT_DIR / ".env"), str(_ROOT_DIR.parent / ".env")),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

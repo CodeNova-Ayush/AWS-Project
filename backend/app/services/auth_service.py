@@ -11,24 +11,34 @@ from app.core.config import settings
 from app.repositories import user_repo
 
 
-async def exchange_github_code(code: str) -> str:
+async def exchange_github_code(code: str, redirect_uri: Optional[str] = None) -> str:
     """POST to GitHub token endpoint and return the access_token string."""
+    data = {
+        "client_id": settings.github_oauth_client_id,
+        "client_secret": settings.github_oauth_client_secret,
+        "code": code,
+    }
+    if redirect_uri:
+        data["redirect_uri"] = redirect_uri
+    elif settings.github_redirect_uri:
+        data["redirect_uri"] = settings.github_redirect_uri
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://github.com/login/oauth/access_token",
             headers={"Accept": "application/json"},
-            data={
-                "client_id": settings.github_oauth_client_id,
-                "client_secret": settings.github_oauth_client_secret,
-                "code": code,
-            },
+            data=data,
         )
         resp.raise_for_status()
-        data = resp.json()
+        res_json = resp.json()
 
-    access_token = data.get("access_token")
+    if "error" in res_json:
+        error_desc = res_json.get("error_description", res_json.get("error"))
+        raise ValueError(f"GitHub OAuth error: {error_desc}")
+
+    access_token = res_json.get("access_token")
     if not access_token:
-        raise ValueError(f"No access_token in GitHub response: {data}")
+        raise ValueError(f"No access_token in GitHub response: {res_json}")
     return access_token
 
 

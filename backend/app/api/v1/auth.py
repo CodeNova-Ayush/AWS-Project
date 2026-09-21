@@ -168,10 +168,28 @@ async def auth_logout(request: Request, response: Response, db: AsyncIOMotorData
     return {"message": "Logged out"}
 
 
+def _get_effective_redirect_uri(request: Request) -> str:
+    """Dynamically determine redirect_uri based on client request host and protocol."""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+    if host and ("13.211.92.23" in host or "sslip.io" in host):
+        return f"{proto}://{host}/auth-callback"
+    if host and "localhost" in host:
+        return f"{proto}://{host}/auth-callback"
+    if settings.github_redirect_uri:
+        return settings.github_redirect_uri
+    if host:
+        return f"{proto}://{host}/auth-callback"
+    return "http://localhost:8000/auth-callback"
+
+
 @router.get("/github/login")
-async def github_login(platform: str = Query(default="web")):
+async def github_login(request: Request, platform: str = Query(default="web")):
     """Return the GitHub OAuth authorisation URL."""
-    if not settings.github_oauth_client_id or not settings.github_redirect_uri:
+    client_id = (settings.github_oauth_client_id or "").strip()
+    is_placeholder = not client_id or client_id.startswith("your_") or "placeholder" in client_id.lower()
+    redirect_uri = _get_effective_redirect_uri(request)
+    if is_placeholder or not redirect_uri:
         return {
             "configured": False,
             "oauth_url": None,
@@ -180,8 +198,8 @@ async def github_login(platform: str = Query(default="web")):
     scope = "repo user"
     oauth_url = (
         "https://github.com/login/oauth/authorize"
-        f"?client_id={quote(settings.github_oauth_client_id, safe='')}"
-        f"&redirect_uri={quote(settings.github_redirect_uri, safe='')}"
+        f"?client_id={quote(client_id, safe='')}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
         f"&scope={quote(scope, safe='')}"
         f"&state={quote(platform, safe='')}"
     )
@@ -196,16 +214,18 @@ async def github_callback(
     db: AsyncIOMotorDatabase = Depends(get_db),
     state: str = Query(default="web"),
     mobile: str = Query(default=""),
+    redirect_uri: Optional[str] = Query(default=None),
 ):
     """Exchange OAuth code → access token → user upsert → session cookie."""
     if not settings.github_oauth_client_id or not settings.github_oauth_client_secret:
         raise HTTPException(status_code=500, detail="GitHub OAuth not configured")
 
+    effective_redirect_uri = redirect_uri or _get_effective_redirect_uri(request)
     try:
-        access_token = await auth_service.exchange_github_code(code)
+        access_token = await auth_service.exchange_github_code(code, redirect_uri=effective_redirect_uri)
     except (httpx.HTTPStatusError, ValueError) as exc:
         logger.error("Token exchange failed: %s", exc)
-        raise HTTPException(status_code=401, detail="Failed to exchange OAuth code")
+        raise HTTPException(status_code=401, detail=f"Failed to exchange OAuth code: {exc}")
 
     try:
         github_user = await auth_service.get_github_user_info(access_token)
