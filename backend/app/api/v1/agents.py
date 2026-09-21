@@ -20,7 +20,13 @@ async def assign_agent(
 ):
     user = await require_user(request, db)
     return await agent_service.assign_agent(
-        db, background_tasks, body.issue_id, body.agent_type, body.repo, user["user_id"]
+        db,
+        background_tasks,
+        body.issue_id,
+        body.agent_type,
+        body.repo,
+        user["user_id"],
+        getattr(body, "auto_merge", False) or False,
     )
 
 

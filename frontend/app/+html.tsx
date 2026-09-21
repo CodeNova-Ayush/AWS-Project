@@ -64,6 +64,35 @@ export default function Root({ children }: PropsWithChildren) {
           }}
         />
 
+        {/* Snappy Reel Card Physics & PWA Overrides */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              [data-snap-feed="true"],
+              [data-snap-feed="true"] > div {
+                scroll-snap-type: y mandatory !important;
+                -webkit-scroll-snap-type: y mandatory !important;
+                overscroll-behavior-y: contain !important;
+                -webkit-overflow-scrolling: touch !important;
+                scroll-behavior: auto !important;
+              }
+              [data-snap-card="true"] {
+                scroll-snap-align: start !important;
+                -webkit-scroll-snap-align: start !important;
+                scroll-snap-stop: always !important;
+                -webkit-scroll-snap-stop: always !important;
+              }
+              /* Prevent pull-to-refresh interference with vertical reel swipe */
+              body {
+                overscroll-behavior-y: none;
+                user-select: none;
+                -webkit-user-select: none;
+                -webkit-tap-highlight-color: transparent;
+              }
+            `,
+          }}
+        />
+
         {/* Expo ScrollView style reset */}
         <ScrollViewStyleReset />
       </head>

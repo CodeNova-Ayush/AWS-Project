@@ -233,13 +233,33 @@ export async function mergePR(
   if (!res.ok) throw new Error('Failed to merge PR');
 }
 
-export async function assignAgent(issueId: string, agentType: "opencode" | "claude_code" | "codex" | "kiro", repo: string): Promise<{job_id: string}> {
+export async function mergeAllPRs(
+  issueIds: string[],
+  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
+): Promise<{ success: boolean; total: number; merged_count: number; results: any[] }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/prs/merge-all`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ issue_ids: issueIds, merge_method: mergeMethod }),
+  });
+  if (!res.ok) throw new Error('Failed to bulk merge PRs');
+  return res.json();
+}
+
+export async function assignAgent(
+  issueId: string,
+  agentType: "opencode" | "claude_code" | "codex" | "kiro",
+  repo: string,
+  autoMerge: boolean = false,
+): Promise<{job_id: string}> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/agents/assign`, {
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ issue_id: issueId, agent_type: agentType, repo })
+    body: JSON.stringify({ issue_id: issueId, agent_type: agentType, repo, auto_merge: autoMerge })
   });
   if (!res.ok) throw new Error('Failed to assign agent');
   return res.json();
@@ -417,14 +437,15 @@ export async function createIssueRemote(
   repo: string,
   title: string,
   description: string,
-  type: string
+  type: string,
+  autoMerge: boolean = false,
 ): Promise<{ success: boolean; issue_url?: string; issue_number?: number; issue_id?: string; issue?: any }> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/issues/create`, {
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ repo, title, description, type }),
+    body: JSON.stringify({ repo, title, description, type, auto_merge: autoMerge }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));

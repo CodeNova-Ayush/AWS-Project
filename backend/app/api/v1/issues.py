@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 import httpx
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -27,6 +28,7 @@ class CreateIssueRequest(BaseModel):
     title: str
     description: str
     type: str
+    auto_merge: Optional[bool] = False
 
 
 # ──── DB issues ────
@@ -173,6 +175,7 @@ async def create_issue(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "diff_lines": [],
             "trajectory_steps": [],
+            "auto_merge": getattr(body, "auto_merge", False) or False,
         }
         await db.issues.update_one(
             {"issue_id": issue_id},

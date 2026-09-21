@@ -149,7 +149,19 @@ export default function CodeIssueCard({
   }
 
   return (
-    <View style={[styles.container, { height }]} testID={`issue-card-${issue.issue_id}`}>
+    <View
+      style={[
+        styles.container,
+        { height },
+        Platform.OS === 'web' && ({
+          scrollSnapAlign: 'start',
+          scrollSnapStop: 'always',
+        } as any),
+      ]}
+      // @ts-ignore
+      dataSet={{ snapCard: 'true' }}
+      testID={`issue-card-${issue.issue_id}`}
+    >
       <ScrollView
         ref={horizontalScrollRef}
         horizontal

@@ -106,3 +106,40 @@ async def merge_pr(
             status_code=exc.response.status_code if exc.response else 502,
             detail=error_detail.get("message", "Failed to merge PR"),
         )
+
+
+@router.post("/merge-all")
+async def merge_all_prs(
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Bulk merge multiple PRs by issue_ids."""
+    user = await require_user(request, db)
+    token = _require_github_token(user)
+    body_data = {}
+    if request.headers.get("content-type") == "application/json":
+        body_data = await request.json()
+    
+    issue_ids = body_data.get("issue_ids", [])
+    merge_method = body_data.get("merge_method", "squash")
+    
+    results = []
+    for issue_id in issue_ids:
+        try:
+            res = await pr_service.merge_pr(
+                issue_id,
+                token,
+                commit_message="Bulk merged via MergeDeck",
+                merge_method=merge_method,
+            )
+            results.append({"issue_id": issue_id, "success": True, "res": res})
+        except Exception as e:
+            results.append({"issue_id": issue_id, "success": False, "error": str(e)})
+            
+    await _invalidate_pr_caches(db, user)
+    return {
+        "success": True,
+        "total": len(issue_ids),
+        "merged_count": sum(1 for r in results if r["success"]),
+        "results": results,
+    }

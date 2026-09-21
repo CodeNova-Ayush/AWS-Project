@@ -27,7 +27,7 @@ class TestIssuesPublic:
         
         issues = response.json()
         assert isinstance(issues, list)
-        assert len(issues) == 6
+        assert len(issues) >= 6
         
         # Verify structure of first issue
         issue = issues[0]

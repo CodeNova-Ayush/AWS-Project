@@ -31,6 +31,7 @@ class AgentAssignRequest(BaseModel):
     issue_id: str
     agent_type: str = Field(..., description="E.g., opencode or claude_code")
     repo: str = Field(..., description="Repository full name, e.g., owner/repo")
+    auto_merge: Optional[bool] = Field(False, description="Automatically merge the PR once agent completes")
 
 
 class JobTraceResponse(BaseModel):

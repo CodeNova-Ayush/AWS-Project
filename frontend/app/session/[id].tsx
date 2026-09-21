@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../src/constants/theme';
-import { fetchJobTrace } from '../../src/services/api';
+import { fetchJobTrace, mergePR } from '../../src/services/api';
 import * as WebBrowser from 'expo-web-browser';
 import CreateIssueModal from '../../src/components/CreateIssueModal';
 import AgentTrajectory from '../../src/components/AgentTrajectory';
@@ -14,8 +14,31 @@ export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [merging, setMerging] = useState(false);
   const [createIssueVisible, setCreateIssueVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  async function handleMergePR() {
+    if (!job) return;
+    const owner = job.pr_owner || (job.repo?.includes('/') ? job.repo.split('/')[0] : '');
+    const repo = job.pr_repo || (job.repo?.includes('/') ? job.repo.split('/')[1] : '');
+    const prNum = job.pr_number;
+    if (!owner || !repo || !prNum) {
+      Alert.alert('Unable to merge', 'PR number or repository information is missing.');
+      return;
+    }
+    const issueId = `gh_pr_${owner}_${repo}_${prNum}`;
+    try {
+      setMerging(true);
+      await mergePR(issueId, 'squash');
+      setJob((prev: any) => ({ ...prev, merged: true, status: 'Merged' }));
+      Alert.alert('PR Merged! 🎉', `Pull Request #${prNum} was successfully merged into the default branch.`);
+    } catch (err: any) {
+      Alert.alert('Merge Failed', err?.message || 'Could not merge PR. Branch protections or reviews may be required.');
+    } finally {
+      setMerging(false);
+    }
+  }
 
   useEffect(() => {
     loadTrace();
@@ -70,8 +93,8 @@ export default function SessionDetailScreen() {
     <View style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.headerInner}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
-            <Feather name="arrow-left" size={24} color={COLORS.textPrimary} />
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+            <Feather name="arrow-left" size={22} color="#18181B" />
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Session {id?.slice(0, 8)}</Text>
@@ -81,7 +104,7 @@ export default function SessionDetailScreen() {
               </View>
             )}
           </View>
-          <View style={{ width: 24 }} />
+          <View style={{ width: 38 }} />
         </View>
       </SafeAreaView>
 
@@ -208,14 +231,41 @@ export default function SessionDetailScreen() {
                   </View>
                 </View>
 
-                {job.pr_url && (
-                  <Pressable
-                    style={styles.prInfoViewBtn}
-                    onPress={() => WebBrowser.openBrowserAsync(job.pr_url)}
-                  >
-                    <Feather name="github" size={13} color="#000" />
-                    <Text style={styles.prInfoViewBtnText}>View on GitHub</Text>
-                  </Pressable>
+                {job.merged ? (
+                  <View style={styles.prMergedBanner}>
+                    <Feather name="check-circle" size={14} color="#10B981" />
+                    <Text style={styles.prMergedBannerText}>
+                      Merged into base branch {job.merge_commit_sha ? `(${job.merge_commit_sha.slice(0, 7)})` : ''}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.prActionsRow}>
+                    {job.pr_url && (
+                      <Pressable
+                        style={[styles.prInfoViewBtn, { flex: 1, marginTop: 0 }]}
+                        onPress={() => WebBrowser.openBrowserAsync(job.pr_url)}
+                      >
+                        <Feather name="github" size={13} color="#000" />
+                        <Text style={styles.prInfoViewBtnText}>View PR</Text>
+                      </Pressable>
+                    )}
+                    {job.pr_number && (
+                      <Pressable
+                        style={[styles.prMergeNowBtn, merging && { opacity: 0.7 }]}
+                        onPress={handleMergePR}
+                        disabled={merging}
+                      >
+                        {merging ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Feather name="git-merge" size={13} color="#FFFFFF" />
+                            <Text style={styles.prMergeNowBtnText}>Merge PR Now</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
                 )}
               </View>
             )}
@@ -316,15 +366,30 @@ export default function SessionDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
-    backgroundColor: 'rgba(5, 5, 5, 0.95)',
+    backgroundColor: '#FAF8F5',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.07)',
   },
   headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   headerCenter: {
     alignItems: 'center',
@@ -333,7 +398,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.textPrimary,
+    color: '#18181B',
     fontWeight: '700',
   },
   content: {
@@ -350,73 +415,80 @@ const styles = StyleSheet.create({
   },
   traceContainer: {
     flex: 1,
-    padding: SPACING.lg,
-    gap: SPACING.lg,
+    padding: SPACING.md,
+    gap: SPACING.md,
   },
   metaBox: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#FFFFFF',
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
   },
   metaLabel: {
     fontSize: 10,
     textTransform: 'uppercase',
-    color: COLORS.textTertiary,
+    color: '#71717A',
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 4,
   },
   metaValue: {
-    color: COLORS.textPrimary,
-    fontSize: FONT_SIZES.md,
-    fontWeight: '600',
+    color: '#18181B',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
   },
   agentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(208, 253, 62, 0.1)',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(208, 253, 62, 0.2)',
-    gap: 4,
+    borderColor: 'rgba(79, 70, 229, 0.25)',
+    gap: 6,
   },
   agentBadgeClaude: {
-    backgroundColor: 'rgba(232, 133, 90, 0.1)',
-    borderColor: 'rgba(232, 133, 90, 0.3)',
+    backgroundColor: 'rgba(232, 133, 90, 0.12)',
+    borderColor: 'rgba(232, 133, 90, 0.35)',
   },
   agentBadgeKiro: {
-    backgroundColor: 'rgba(255, 153, 0, 0.1)',
-    borderColor: 'rgba(255, 153, 0, 0.3)',
+    backgroundColor: 'rgba(255, 153, 0, 0.12)',
+    borderColor: 'rgba(255, 153, 0, 0.35)',
   },
   agentBadgeText: {
-    color: COLORS.primary,
+    color: '#18181B',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   statusBadge: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
   },
   statusText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   summaryBox: {
-    backgroundColor: 'rgba(208, 253, 62, 0.05)',
+    backgroundColor: '#FFFFFF',
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    borderLeftWidth: 3,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
   },
   summaryTitle: {
-    color: COLORS.textPrimary,
+    color: '#18181B',
     fontSize: FONT_SIZES.sm,
     fontWeight: '700',
     marginBottom: SPACING.xs,
@@ -589,6 +661,44 @@ const styles = StyleSheet.create({
   },
   prInfoViewBtnText: {
     color: '#000',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+  },
+  prMergedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+    marginTop: SPACING.xs,
+  },
+  prMergedBannerText: {
+    color: '#10B981',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+  },
+  prActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  prMergeNowBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: '#10B981',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+  },
+  prMergeNowBtnText: {
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.sm,
     fontWeight: '700',
   },

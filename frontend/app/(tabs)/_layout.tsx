@@ -6,6 +6,11 @@ export default function TabsLayout() {
     <Tabs
       tabBar={(props) => <FloatingPillNav {...props} />}
       screenOptions={{ headerShown: false }}
-    />
+    >
+      <Tabs.Screen name="feed" options={{ title: 'Feed' }} />
+      <Tabs.Screen name="sessions" options={{ title: 'Sessions' }} />
+      <Tabs.Screen name="saved" options={{ title: 'Saved' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Account' }} />
+    </Tabs>
   );
 }

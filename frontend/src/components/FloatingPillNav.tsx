@@ -9,6 +9,7 @@ import { COLORS } from '../constants/theme';
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   feed:     'layers',
   sessions: 'activity',
+  saved:    'bookmark',
   profile:  'user',
 };
 

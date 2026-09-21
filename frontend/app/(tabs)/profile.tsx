@@ -1,22 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, ScrollView, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
+  ScrollView,
+  Alert,
+  Platform,
+  Switch,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import CodeBackground from '../../src/components/CodeBackground';
 import {
   fetchMe,
   logout,
-  fetchSavedIssues,
   getUserKeyStatus,
   saveProviderKey,
   setActiveProvider,
   deleteProviderKey,
   UserKeysStatus,
 } from '../../src/services/api';
-import { CodeIssue } from '../../src/constants/types';
+import { User } from '../../src/constants/types';
 
 export const PROVIDER_PRESETS = [
   {
@@ -105,78 +117,10 @@ export const PROVIDER_PRESETS = [
   },
 ];
 
-const TYPE_CONFIG = {
-  bug:         { icon: 'alert-circle' as const, color: COLORS.error,   bg: COLORS.errorBg,                    label: 'Bug Fix' },
-  performance: { icon: 'zap'          as const, color: COLORS.warning,  bg: 'rgba(245,158,11,0.1)',             label: 'Performance' },
-  suggestion:  { icon: 'message-square' as const, color: COLORS.info,  bg: 'rgba(59,130,246,0.1)',             label: 'Suggestion' },
-};
-
-function SavedIssueCard({ issue, onPress, canNavigate }: { issue: CodeIssue; onPress: () => void; canNavigate: boolean }) {
-  const cfg = TYPE_CONFIG[issue.type] ?? TYPE_CONFIG.bug;
-
-  return (
-    <Pressable style={[styles.savedCard, { borderLeftColor: cfg.color }]} onPress={onPress}>
-      {/* Type badge + language */}
-      <View style={styles.savedCardTop}>
-        <View style={[styles.typeBadge, { backgroundColor: cfg.bg }]}>
-          <Feather name={cfg.icon} size={11} color={cfg.color} />
-          <Text style={[styles.typeBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
-        </View>
-        <View style={styles.langBadge}>
-          <Text style={styles.langText}>{issue.language}</Text>
-        </View>
-      </View>
-
-      {/* Title */}
-      <Text style={styles.savedCardTitle} numberOfLines={2}>{issue.title}</Text>
-
-      {/* Repo + branch row */}
-      <View style={styles.savedCardMeta}>
-        <View style={styles.metaChip}>
-          <Feather name="github" size={11} color={COLORS.textTertiary} />
-          <Text style={styles.metaChipText} numberOfLines={1}>{issue.project}</Text>
-        </View>
-        <View style={styles.metaChip}>
-          <Feather name="git-branch" size={11} color={COLORS.textTertiary} />
-          <Text style={styles.metaChipText} numberOfLines={1}>{issue.branch}</Text>
-        </View>
-        {issue.agent_lines_changed !== undefined && (
-          <View style={[styles.metaChip, { borderColor: 'rgba(34,197,94,0.3)', backgroundColor: 'rgba(34,197,94,0.08)' }]}>
-            <Feather name="code" size={11} color={COLORS.success} />
-            <Text style={[styles.metaChipText, { color: COLORS.success }]}>
-              {issue.agent_lines_changed > 0 ? `+${issue.agent_lines_changed}` : issue.agent_lines_changed} lines
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Footer */}
-      <View style={styles.savedCardFooter}>
-        {issue.github_pr_number && (
-          <Text style={styles.prNum}>PR #{issue.github_pr_number}</Text>
-        )}
-        <View style={{ flex: 1 }} />
-        {canNavigate ? (
-          <View style={styles.viewBtn}>
-            <Text style={styles.viewBtnText}>View session</Text>
-            <Feather name="arrow-right" size={12} color={COLORS.primary} />
-          </View>
-        ) : issue.github_pr_url ? (
-          <View style={[styles.viewBtn, { borderColor: `${COLORS.info}30`, backgroundColor: `${COLORS.info}15` }]}>
-            <Text style={[styles.viewBtnText, { color: COLORS.info }]}>Open PR</Text>
-            <Feather name="external-link" size={12} color={COLORS.info} />
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
-  );
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savedIssues, setSavedIssues] = useState<CodeIssue[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState('groq');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [modelInput, setModelInput] = useState('');
@@ -190,30 +134,77 @@ export default function ProfileScreen() {
     has_anthropic_key: false,
   });
 
-  useEffect(() => { loadUser(); }, []);
+  const [filterBotPreference, setFilterBotPreference] = useState(true);
+  const [trajectoryDetail, setTrajectoryDetail] = useState<'concise' | 'deep'>('deep');
+  const [diffDensity, setDiffDensity] = useState<'compact' | 'comfortable'>('comfortable');
+  const [isStandalonePWA, setIsStandalonePWA] = useState(false);
+
+  useEffect(() => {
+    loadUser();
+    loadPreferences();
+    checkPWA();
+  }, []);
+
+  async function loadPreferences() {
+    try {
+      const savedBot = await AsyncStorage.getItem('pref_filter_bot');
+      if (savedBot !== null) setFilterBotPreference(savedBot === 'true');
+      const savedTraj = await AsyncStorage.getItem('pref_trajectory_detail');
+      if (savedTraj) setTrajectoryDetail(savedTraj as 'concise' | 'deep');
+      const savedDensity = await AsyncStorage.getItem('pref_diff_density');
+      if (savedDensity) setDiffDensity(savedDensity as 'compact' | 'comfortable');
+    } catch {}
+  }
+
+  function checkPWA() {
+    if (typeof window !== 'undefined') {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+      setIsStandalonePWA(!!isStandalone);
+    }
+  }
+
+  async function toggleBotPreference() {
+    const next = !filterBotPreference;
+    setFilterBotPreference(next);
+    await AsyncStorage.setItem('pref_filter_bot', String(next));
+  }
+
+  async function selectTrajectoryDetail(val: 'concise' | 'deep') {
+    setTrajectoryDetail(val);
+    await AsyncStorage.setItem('pref_trajectory_detail', val);
+  }
+
+  async function selectDiffDensity(val: 'compact' | 'comfortable') {
+    setDiffDensity(val);
+    await AsyncStorage.setItem('pref_diff_density', val);
+  }
 
   async function loadUser() {
     try {
       const data = await fetchMe();
       if (data) {
         setUser(data);
-        const [savedData, status] = await Promise.all([fetchSavedIssues(), getUserKeyStatus()]);
-        setSavedIssues(savedData);
+        const status = await getUserKeyStatus();
         setKeyStatus(status);
         const initialProvider = status.active_provider || 'groq';
         setSelectedProviderId(initialProvider);
-        const preset = PROVIDER_PRESETS.find(p => p.id === initialProvider);
+        const preset = PROVIDER_PRESETS.find((p) => p.id === initialProvider);
         setModelInput(status.providers?.[initialProvider]?.model || preset?.defaultModel || '');
         setBaseUrlInput(status.providers?.[initialProvider]?.base_url || preset?.defaultBaseUrl || '');
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleSelectProvider(pId: string) {
     setSelectedProviderId(pId);
     const conf = keyStatus.providers?.[pId];
-    const preset = PROVIDER_PRESETS.find(p => p.id === pId);
+    const preset = PROVIDER_PRESETS.find((p) => p.id === pId);
     setModelInput(conf?.model || preset?.defaultModel || '');
     setBaseUrlInput(conf?.base_url || preset?.defaultBaseUrl || '');
     setApiKeyInput('');
@@ -246,7 +237,7 @@ export default function ProfileScreen() {
 
   async function handleSetActive(pId: string) {
     try {
-      const currentModel = keyStatus.providers?.[pId]?.model || PROVIDER_PRESETS.find(p => p.id === pId)?.defaultModel || '';
+      const currentModel = keyStatus.providers?.[pId]?.model || PROVIDER_PRESETS.find((p) => p.id === pId)?.defaultModel || '';
       await setActiveProvider(pId, currentModel);
       const updatedStatus = await getUserKeyStatus();
       setKeyStatus(updatedStatus);
@@ -256,7 +247,7 @@ export default function ProfileScreen() {
   }
 
   async function handleDeleteProvider(pId: string) {
-    const pName = PROVIDER_PRESETS.find(p => p.id === pId)?.name || pId;
+    const pName = PROVIDER_PRESETS.find((p) => p.id === pId)?.name || pId;
     Alert.alert(`Delete ${pName} Key?`, `Remove stored credentials for ${pName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -283,10 +274,10 @@ export default function ProfileScreen() {
     router.replace('/');
   }
 
-  const currentPreset = PROVIDER_PRESETS.find(p => p.id === selectedProviderId) || PROVIDER_PRESETS[0];
+  const currentPreset = PROVIDER_PRESETS.find((p) => p.id === selectedProviderId) || PROVIDER_PRESETS[0];
   const isSelectedConfigured = !!keyStatus.providers?.[selectedProviderId]?.configured;
   const isSelectedActive = keyStatus.active_provider === selectedProviderId;
-  const activePreset = PROVIDER_PRESETS.find(p => p.id === keyStatus.active_provider) || PROVIDER_PRESETS[0];
+  const activePreset = PROVIDER_PRESETS.find((p) => p.id === keyStatus.active_provider) || PROVIDER_PRESETS[0];
 
   if (loading) {
     return (
@@ -302,39 +293,55 @@ export default function ProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={COLORS.textPrimary} />
+          <Feather name="arrow-left" size={20} color={COLORS.textPrimary} />
         </Pressable>
-        <Text style={styles.title}>Profile</Text>
-        <View style={{ width: 22 }} />
+        <Text style={styles.title}>Account</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {user ? (
           <View>
             {/* ── Profile Card ── */}
             <View style={styles.profileCard}>
               <View style={styles.profileInner}>
                 <View style={styles.avatarRing}>
-                  <View style={styles.avatarInner}>
-                    <Feather name="user" size={26} color={COLORS.primary} />
-                  </View>
+                  {user.picture ? (
+                    <Image source={{ uri: user.picture }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarInner}>
+                      <Feather name="user" size={24} color={COLORS.primary} />
+                    </View>
+                  )}
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.nameText} numberOfLines={1}>
                     {user.name || user.github_username || 'Developer'}
                   </Text>
                   {user.email ? (
-                    <Text style={styles.emailText} numberOfLines={1}>{user.email}</Text>
+                    <Text style={styles.emailText} numberOfLines={1}>
+                      {user.email}
+                    </Text>
                   ) : null}
-                  {user.github_username ? (
-                    <View style={styles.githubChip}>
-                      <Feather name="github" size={11} color={COLORS.primary} />
-                      <Text style={styles.githubChipText}>@{user.github_username}</Text>
+                  <View style={styles.profileBadgeRow}>
+                    {user.github_username ? (
+                      <Pressable
+                        style={styles.githubChip}
+                        onPress={() => WebBrowser.openBrowserAsync(`https://github.com/${user.github_username}`)}
+                      >
+                        <Feather name="github" size={11} color={COLORS.primary} />
+                        <Text style={styles.githubChipText}>@{user.github_username}</Text>
+                        <Feather name="external-link" size={10} color={COLORS.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    <View style={styles.verifiedBadge}>
+                      <Feather name="check-circle" size={10} color="#10B981" />
+                      <Text style={styles.verifiedText}>OAuth Connected</Text>
                     </View>
-                  ) : null}
+                  </View>
                 </View>
-                <Pressable style={styles.logoutBtn} onPress={handleLogout}>
-                  <Feather name="log-out" size={15} color={COLORS.error} />
+                <Pressable style={styles.logoutBtn} onPress={handleLogout} accessibilityLabel="Sign Out">
+                  <Feather name="log-out" size={16} color={COLORS.error} />
                 </Pressable>
               </View>
             </View>
@@ -346,13 +353,16 @@ export default function ProfileScreen() {
                   <View style={styles.activePillDot} />
                   <Text style={styles.activePillText}>ACTIVE AI ENGINE</Text>
                 </View>
-                <Text style={styles.activeProviderName}>{activePreset.name}</Text>
+                <View style={styles.activeProviderTag}>
+                  <Feather name={activePreset.icon as any} size={13} color={activePreset.color} />
+                  <Text style={styles.activeProviderName}>{activePreset.name}</Text>
+                </View>
               </View>
               <Text style={styles.activeModelText}>
-                Model: <Text style={{ color: COLORS.primary, fontFamily: 'monospace' }}>{keyStatus.active_model || activePreset.defaultModel || 'Default'}</Text>
+                Model: <Text style={styles.activeModelHighlight}>{keyStatus.active_model || activePreset.defaultModel || 'Default'}</Text>
               </Text>
               <Text style={styles.activeHintText}>
-                Used automatically for Code Review AI Chat, PR Analysis, and Agent workflows.
+                Powers code review AI chat, PR reasoning analysis, and autonomous background agent workflows.
               </Text>
             </View>
 
@@ -362,8 +372,13 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>AI Providers & API Keys (BYOK)</Text>
             </View>
 
-            {/* Horizontal Provider Selector */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.providerScroll} contentContainerStyle={styles.providerScrollContent}>
+            {/* Horizontal Provider Selector (Uniform Pill Row) */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.providerScroll}
+              contentContainerStyle={styles.providerScrollContent}
+            >
               {PROVIDER_PRESETS.map((p) => {
                 const isConfigured = !!keyStatus.providers?.[p.id]?.configured;
                 const isActive = keyStatus.active_provider === p.id;
@@ -373,26 +388,23 @@ export default function ProfileScreen() {
                   <Pressable
                     key={p.id}
                     style={[
-                      styles.providerTab,
-                      isSelected && styles.providerTabSelected,
-                      isActive && styles.providerTabActiveBorder,
+                      styles.providerPill,
+                      isSelected && styles.providerPillSelected,
                     ]}
                     onPress={() => handleSelectProvider(p.id)}
                   >
-                    <View style={styles.providerTabHeader}>
-                      <Feather name={p.icon as any} size={14} color={isSelected ? COLORS.primary : p.color} />
-                      <Text style={[styles.providerTabText, isSelected && styles.providerTabTextSelected]}>
-                        {p.name}
-                      </Text>
-                      {isConfigured && (
-                        <View style={styles.configuredDot} />
-                      )}
-                    </View>
-                    {isActive && (
-                      <View style={styles.activeMiniBadge}>
-                        <Text style={styles.activeMiniBadgeText}>ACTIVE</Text>
+                    <Feather name={p.icon as any} size={14} color={isSelected ? COLORS.primary : p.color} />
+                    <Text style={[styles.providerPillText, isSelected && styles.providerPillTextSelected]}>
+                      {p.name}
+                    </Text>
+                    {isActive ? (
+                      <View style={styles.activePillInline}>
+                        <View style={styles.activeDotInline} />
+                        <Text style={styles.activeTextInline}>ACTIVE</Text>
                       </View>
-                    )}
+                    ) : isConfigured ? (
+                      <View style={styles.configuredDotInline} />
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -442,9 +454,7 @@ export default function ProfileScreen() {
 
               {/* Input Form */}
               <View style={styles.keyInputsWrapper}>
-                <Text style={styles.inputLabel}>
-                  {currentPreset.name} API Key
-                </Text>
+                <Text style={styles.inputLabel}>{currentPreset.name} API Key</Text>
                 <TextInput
                   style={styles.keyInput}
                   placeholder={isSelectedConfigured ? '•••••••••••••••••••••••• (Leave blank to keep)' : currentPreset.placeholder}
@@ -514,43 +524,199 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* ── Saved Work ── */}
+            {/* ── Review & Feed Preferences ── */}
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: COLORS.accent }]} />
-              <Text style={styles.sectionTitle}>Saved Work</Text>
-              {savedIssues.length > 0 && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{savedIssues.length}</Text>
-                </View>
-              )}
+              <View style={[styles.sectionDot, { backgroundColor: '#8B5CF6' }]} />
+              <Text style={styles.sectionTitle}>Review & Feed Preferences</Text>
             </View>
 
-            {savedIssues.length === 0 ? (
-              <View style={styles.emptySaved}>
-                <View style={styles.emptyIconRing}>
-                  <Feather name="bookmark" size={24} color={COLORS.accent} />
+            <View style={styles.settingsCard}>
+              <View style={styles.settingRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={styles.settingLabel}>Highlight Agent PRs</Text>
+                  <Text style={styles.settingDesc}>
+                    Prioritize PRs opened or updated by autonomous AI agents (Claude, Copilot, Dependabot) in the reel deck.
+                  </Text>
                 </View>
-                <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-                <Text style={styles.emptyDesc}>Bookmark PRs from the feed to find them here.</Text>
+                <Switch
+                  value={filterBotPreference}
+                  onValueChange={toggleBotPreference}
+                  trackColor={{ false: 'rgba(0,0,0,0.1)', true: COLORS.primary }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
-            ) : (
-              <View style={styles.savedList}>
-                {savedIssues.map((issue) => (
-                  <SavedIssueCard
-                    key={issue.issue_id}
-                    issue={issue}
-                    canNavigate={!!issue.agent_job_id}
-                    onPress={() => {
-                      if (issue.agent_job_id) {
-                        router.push(`/session/${issue.agent_job_id}`);
-                      } else if (issue.github_pr_url) {
-                        WebBrowser.openBrowserAsync(issue.github_pr_url);
+
+              <View style={styles.settingDivider} />
+
+              <View style={styles.settingBlock}>
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={styles.settingLabel}>Agent Trajectory Detail</Text>
+                  <Text style={styles.settingDesc}>
+                    Choose how deep the agent intent, reasoning trace, and tool call breakdown appear on PR cards.
+                  </Text>
+                </View>
+                <View style={styles.segmentedControl}>
+                  <Pressable
+                    style={[styles.segmentBtn, trajectoryDetail === 'concise' && styles.segmentBtnActive]}
+                    onPress={() => selectTrajectoryDetail('concise')}
+                  >
+                    <Text style={[styles.segmentBtnText, trajectoryDetail === 'concise' && styles.segmentBtnTextActive]}>
+                      Concise
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.segmentBtn, trajectoryDetail === 'deep' && styles.segmentBtnActive]}
+                    onPress={() => selectTrajectoryDetail('deep')}
+                  >
+                    <Text style={[styles.segmentBtnText, trajectoryDetail === 'deep' && styles.segmentBtnTextActive]}>
+                      Deep Trace (Recommended)
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.settingDivider} />
+
+              <View style={styles.settingBlock}>
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={styles.settingLabel}>Diff Density</Text>
+                  <Text style={styles.settingDesc}>
+                    Display micro-diff blocks in comfortable or compact high-density mode.
+                  </Text>
+                </View>
+                <View style={styles.segmentedControl}>
+                  <Pressable
+                    style={[styles.segmentBtn, diffDensity === 'comfortable' && styles.segmentBtnActive]}
+                    onPress={() => selectDiffDensity('comfortable')}
+                  >
+                    <Text style={[styles.segmentBtnText, diffDensity === 'comfortable' && styles.segmentBtnTextActive]}>
+                      Comfortable
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.segmentBtn, diffDensity === 'compact' && styles.segmentBtnActive]}
+                    onPress={() => selectDiffDensity('compact')}
+                  >
+                    <Text style={[styles.segmentBtnText, diffDensity === 'compact' && styles.segmentBtnTextActive]}>
+                      Compact
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+
+            {/* ── Reviewer Shortcuts & Gestures Guide ── */}
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionDot, { backgroundColor: '#3B82F6' }]} />
+              <Text style={styles.sectionTitle}>Reviewer Gestures & Quick Guide</Text>
+            </View>
+
+            <View style={styles.guideCard}>
+              <View style={styles.guideRow}>
+                <View style={styles.guideKeyBadge}>
+                  <Feather name="arrow-up" size={12} color={COLORS.textPrimary} />
+                  <Feather name="arrow-down" size={12} color={COLORS.textPrimary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideLabel}>Reel Swipe Navigation</Text>
+                  <Text style={styles.guideDesc}>Swipe or scroll up/down for snappy 1-PR reel transitions.</Text>
+                </View>
+              </View>
+
+              <View style={styles.guideRow}>
+                <View style={styles.guideKeyBadge}>
+                  <Feather name="message-square" size={13} color={COLORS.textPrimary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideLabel}>Instant AI Chat</Text>
+                  <Text style={styles.guideDesc}>Tap the AI button on any PR card to ask questions about the diff.</Text>
+                </View>
+              </View>
+
+              <View style={styles.guideRow}>
+                <View style={styles.guideKeyBadge}>
+                  <Feather name="play-circle" size={13} color={COLORS.textPrimary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideLabel}>Dispatch Background Agent</Text>
+                  <Text style={styles.guideDesc}>Launch automated test runs or refinement agents with one tap.</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* ── App Runtime & Diagnostics ── */}
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionDot, { backgroundColor: '#10B981' }]} />
+              <Text style={styles.sectionTitle}>Client & System Diagnostics</Text>
+            </View>
+
+            <View style={styles.diagnosticsCard}>
+              <View style={styles.diagRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagLabel}>Runtime Environment</Text>
+                  <Text style={styles.diagValue}>
+                    {isStandalonePWA ? 'Installed Standalone PWA' : 'Web Browser Client'}
+                  </Text>
+                </View>
+                <View style={[styles.diagStatusPill, { backgroundColor: isStandalonePWA ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)' }]}>
+                  <View style={[styles.diagStatusDot, { backgroundColor: isStandalonePWA ? '#10B981' : '#3B82F6' }]} />
+                  <Text style={[styles.diagStatusText, { color: isStandalonePWA ? '#10B981' : '#3B82F6' }]}>
+                    {isStandalonePWA ? 'STANDALONE' : 'BROWSER'}
+                  </Text>
+                </View>
+              </View>
+
+              {!isStandalonePWA && (
+                <Pressable
+                  style={styles.installPwaRowBtn}
+                  onPress={() => {
+                    if (typeof window !== 'undefined') {
+                      const ua = navigator.userAgent.toLowerCase();
+                      const isIos = /iphone|ipad|ipod/.test(ua);
+                      if (isIos) {
+                        Alert.alert(
+                          'Install on iPhone / iPad',
+                          '1. In Safari, tap the Share button (square with arrow pointing up).\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" in the top right.\n\nMergeDeck will launch full-screen from your home screen!',
+                          [{ text: 'Got it' }]
+                        );
+                      } else {
+                        Alert.alert(
+                          'Install on Android / Chrome',
+                          '1. In Chrome, tap the three dots menu (⋮) in the top-right corner.\n2. Tap "Install app" or "Add to Home screen".\n3. Tap "Install".\n\nMergeDeck will appear in your app drawer and home screen!',
+                          [{ text: 'Got it' }]
+                        );
                       }
-                    }}
-                  />
-                ))}
+                    }
+                  }}
+                >
+                  <Feather name="download" size={12} color={COLORS.primary} />
+                  <Text style={styles.installPwaRowText}>Install PWA on this Device →</Text>
+                </Pressable>
+              )}
+
+              <View style={styles.diagDivider} />
+
+              <View style={styles.diagRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagLabel}>Service Worker Cache</Text>
+                  <Text style={styles.diagValue}>Offline Ready & Synced</Text>
+                </View>
+                <View style={[styles.diagStatusPill, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                  <View style={[styles.diagStatusDot, { backgroundColor: '#10B981' }]} />
+                  <Text style={[styles.diagStatusText, { color: '#10B981' }]}>ACTIVE</Text>
+                </View>
               </View>
-            )}
+
+              <View style={styles.diagDivider} />
+
+              <View style={styles.diagRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagLabel}>MergeDeck Client Version</Text>
+                  <Text style={styles.diagValue}>v1.4.2 (Edge Build)</Text>
+                </View>
+                <Text style={styles.diagBuildText}>AWS Docker</Text>
+              </View>
+            </View>
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -621,18 +787,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.07)',
-    flexDirection: 'row',
     overflow: 'hidden',
-    ...SHADOWS.md,
-  },
-  profileAccentBar: {
-    display: 'none',
+    ...SHADOWS.sm,
   },
   profileInner: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
+    padding: 16,
     gap: 14,
   },
   avatarRing: {
@@ -644,6 +805,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FAF8F5',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   avatarInner: {
     flex: 1,
@@ -667,12 +834,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
   },
+  profileBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
   githubChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: 4,
-    alignSelf: 'flex-start',
     backgroundColor: '#FAF8F5',
     borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: 9,
@@ -683,6 +855,22 @@ const styles = StyleSheet.create({
   githubChipText: {
     fontSize: 11,
     color: '#27272A',
+    fontWeight: '600',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  verifiedText: {
+    fontSize: 10,
+    color: '#10B981',
     fontWeight: '600',
   },
   logoutBtn: {
@@ -696,12 +884,83 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.15)',
   },
 
+  // ── Active AI Engine Banner ──
+  activeEngineCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 16,
+    marginTop: 14,
+    gap: 7,
+    ...SHADOWS.sm,
+  },
+  activeEngineTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  activePillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  activePillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#059669',
+    letterSpacing: 0.5,
+  },
+  activeProviderTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  activeProviderName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  activeModelText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  activeModelHighlight: {
+    color: COLORS.primary,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+  },
+  activeHintText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    lineHeight: 16,
+  },
+
   // ── Section headers ──
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 24,
+    marginTop: 22,
     marginBottom: 12,
   },
   sectionDot: {
@@ -716,145 +975,84 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     flex: 1,
   },
-  countBadge: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: BORDER_RADIUS.full,
-    paddingHorizontal: 9,
+
+  // ── Provider Selector (Uniform Height Pill Row) ──
+  providerScroll: {
+    marginBottom: 14,
+  },
+  providerScrollContent: {
+    gap: 8,
     paddingVertical: 2,
+  },
+  providerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.08)',
+    paddingHorizontal: 14,
+    height: 38,
+    ...SHADOWS.sm,
   },
-  countText: {
-    fontSize: 11,
+  providerPillSelected: {
+    borderColor: '#18181B',
+    backgroundColor: '#FAF8F5',
+    borderWidth: 1.5,
+  },
+  providerPillText: {
+    fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: '600',
   },
+  providerPillTextSelected: {
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+  },
+  activePillInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  activeDotInline: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  activeTextInline: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#059669',
+    letterSpacing: 0.3,
+  },
+  configuredDotInline: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
 
-  // ── Active Engine Card ──
-  activeEngineCard: {
+  // ── Provider Config Inside Card ──
+  keysCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.07)',
-    padding: 16,
-    marginTop: 14,
-    gap: 6,
+    padding: 18,
+    gap: 14,
     ...SHADOWS.sm,
   },
-  activeEngineTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  activePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#FAF8F5',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.07)',
-  },
-  activePillDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  activePillText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#27272A',
-    letterSpacing: 0.5,
-  },
-  activeProviderName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  activeModelText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  activeHintText: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    lineHeight: 16,
-  },
-
-  // ── Provider Selector ──
-  providerScroll: {
-    marginBottom: 12,
-  },
-  providerScrollContent: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  providerTab: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.07)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 4,
-    minWidth: 96,
-    ...SHADOWS.sm,
-  },
-  providerTabSelected: {
-    borderColor: '#18181B',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    ...SHADOWS.md,
-  },
-  providerTabActiveBorder: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#18181B',
-  },
-  providerTabHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  providerTabText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  providerTabTextSelected: {
-    color: COLORS.textPrimary,
-    fontWeight: '700',
-  },
-  configuredDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  activeMiniBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  activeMiniBadgeText: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: '#059669',
-  },
-
-  // ── Provider Config Inside Card ──
   providerConfigHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
   },
   providerIconRing: {
@@ -870,82 +1068,106 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   providerConfigHint: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textTertiary,
     marginTop: 2,
   },
   activeBadgeLarge: {
-    backgroundColor: 'rgba(24, 24, 27, 0.06)',
-    borderColor: 'rgba(24, 24, 27, 0.12)',
-    borderWidth: 1,
-    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
   activeBadgeLargeText: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
-    color: '#18181B',
+    color: '#059669',
+    letterSpacing: 0.5,
   },
   trashBtn: {
-    padding: 8,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   providerStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   statusLabel: {
     fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
   activateBtn: {
     backgroundColor: '#18181B',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    ...SHADOWS.sm,
+    borderRadius: 8,
   },
   activateBtnText: {
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
-
-  // ── Model Chips ──
+  keysDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  keyInputsWrapper: {
+    gap: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  keyInput: {
+    backgroundColor: '#FAF8F5',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   modelChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   modelChip: {
     backgroundColor: '#FAF8F5',
-    borderRadius: BORDER_RADIUS.full,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   modelChipSelected: {
-    backgroundColor: '#18181B',
-    borderColor: '#18181B',
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
   },
   modelChipText: {
     fontSize: 11,
@@ -953,210 +1175,200 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   modelChipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-
-  // ── API Keys Card ──
-  keysCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.07)',
-    ...SHADOWS.md,
-  },
-  keysDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
-    marginVertical: 14,
-  },
-  keyInputsWrapper: {
-    marginTop: 10,
-    gap: 8,
-  },
-  inputLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: COLORS.primary,
     fontWeight: '700',
-    marginBottom: 2,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  keyInput: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   keyActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-    alignItems: 'center',
+    marginTop: 4,
   },
   saveKeyBtn: {
-    flex: 1,
     backgroundColor: '#18181B',
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
     ...SHADOWS.sm,
   },
   saveKeyBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  deleteKeyBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.15)',
   },
 
-  // ── Saved Work ──
-  savedList: {
-    gap: 12,
-  },
-  savedCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.07)',
-    borderLeftWidth: 4,
-    padding: 16,
-    gap: 10,
-    ...SHADOWS.sm,
-  },
-  savedCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.full,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  langBadge: {
-    marginLeft: 'auto',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: '#FAF8F5',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  langText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  savedCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    lineHeight: 19,
-    letterSpacing: -0.2,
-  },
-  savedCardMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: '#FAF8F5',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-  },
-  metaChipText: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    maxWidth: 120,
-    fontWeight: '500',
-  },
-  savedCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  prNum: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-    fontWeight: '600',
-  },
-  viewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: '#18181B',
-    ...SHADOWS.sm,
-  },
-  viewBtnText: {
-    fontSize: 11,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  emptySaved: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 36,
+  // ── Preferences Card ──
+  settingsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 16,
     ...SHADOWS.sm,
   },
-  emptyIconRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  settingDesc: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    marginVertical: 14,
+  },
+  settingBlock: {
+    gap: 4,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
     backgroundColor: '#FAF8F5',
+    borderRadius: 10,
+    padding: 3,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.07)',
-    justifyContent: 'center',
+    gap: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 7,
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'center',
+    borderRadius: 8,
   },
-  emptyTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
+  segmentBtnActive: {
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.sm,
   },
-  emptyDesc: {
-    color: COLORS.textTertiary,
+  segmentBtnText: {
     fontSize: 12,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-    lineHeight: 18,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  segmentBtnTextActive: {
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+
+  // ── Guide Card ──
+  guideCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 16,
+    gap: 14,
+    ...SHADOWS.sm,
+  },
+  guideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  guideKeyBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FAF8F5',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  guideLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  guideDesc: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 1,
+  },
+
+  // ── Diagnostics Card ──
+  diagnosticsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+    padding: 16,
+    ...SHADOWS.sm,
+  },
+  diagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  diagLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  diagValue: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  diagStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  diagStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  diagStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  diagDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    marginVertical: 12,
+  },
+  diagBuildText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: COLORS.textTertiary,
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  installPwaRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.07)',
+  },
+  installPwaRowText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
 
   // ── Logged-out empty state ──
@@ -1165,6 +1377,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
+  },
+  emptyTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  emptyDesc: {
+    color: COLORS.textTertiary,
+    fontSize: 13,
+    textAlign: 'center',
   },
   primaryBtn: {
     marginTop: 16,

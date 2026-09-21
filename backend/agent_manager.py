@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import httpx
 
+import re
 from typing import Optional, List, Dict, Any
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from app.core.config import settings
@@ -382,7 +383,7 @@ Do NOT output anything other than valid JSON."""
     return files_modified > 0
 
 
-async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: str, user_id: str = ""):
+async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: str, user_id: str = "", auto_merge: bool = False):
     """
     Background worker that runs `codex`, `opencode`, `claude_code`, or the autonomous BYOK engine in an isolated directory.
     """
@@ -629,13 +630,86 @@ async def run_agent_job(db, job_id: str, issue_id: str, agent_type: str, repo: s
                         "follow_new_pr_format": True,
                     }}
                 )
+
+                # Auto-Merge Evaluation
+                job_doc = await db.agent_jobs.find_one({"job_id": job_id}) or {}
+                explicit_auto_merge = bool(
+                    auto_merge
+                    or job_doc.get("auto_merge", False)
+                    or (issue and issue.get("auto_merge", False))
+                )
+
+                combined_intent_text = ""
+                if issue:
+                    combined_intent_text += f" {issue.get('title', '')} {issue.get('description', '')}"
+                if prompt_text:
+                    combined_intent_text += f" {prompt_text}"
+
+                intent_auto_merge = bool(re.search(
+                    r"\b(auto[- ]?merge|automerge|merge\s+(all|the|it|this|pr|prs|changes|fixes|branch|into\s+(main|master))|and\s+merge|fix\s+(and|&)\s+merge)\b",
+                    combined_intent_text,
+                    re.IGNORECASE
+                ))
+
+                should_auto_merge = explicit_auto_merge or intent_auto_merge
+
+                if should_auto_merge and pr_number:
+                    await append_trace(db, job_id, f"Auto-merge requested: Merging Pull Request #{pr_number} into '{base_branch}' via GitHub API...")
+                    merge_url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_number}/merge"
+                    merge_payload = {
+                        "commit_title": f"Merge PR #{pr_number}: {pr_title}",
+                        "commit_message": f"Auto-merged by MergeDeck Agent ({agent_type}) following verified code fixes.\n\nJob ID: {job_id}",
+                        "merge_method": "squash",
+                    }
+                    async with httpx.AsyncClient() as client:
+                        merge_res = await client.put(
+                            merge_url,
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Accept": "application/vnd.github+json",
+                                "X-GitHub-Api-Version": "2022-11-28",
+                            },
+                            json=merge_payload,
+                            timeout=25.0,
+                        )
+                        if merge_res.status_code in (200, 201):
+                            m_data = merge_res.json()
+                            m_sha = m_data.get("sha", "")
+                            await append_trace(db, job_id, f"✅ Pull Request #{pr_number} successfully merged into '{base_branch}'! (Commit: {m_sha[:7] if m_sha else 'verified'})")
+                            await db.agent_jobs.update_one(
+                                {"job_id": job_id},
+                                {"$set": {
+                                    "status": "Merged",
+                                    "merged": True,
+                                    "merged_at": datetime.now(timezone.utc).isoformat(),
+                                    "merge_commit_sha": m_sha,
+                                }}
+                            )
+                            if issue_id:
+                                await db.issues.update_one(
+                                    {"issue_id": issue_id},
+                                    {"$set": {"status": "Merged", "merged": True}}
+                                )
+                        else:
+                            try:
+                                err_data = merge_res.json()
+                                err_msg = err_data.get("message", merge_res.text)
+                            except Exception:
+                                err_msg = merge_res.text
+                            await append_trace(
+                                db,
+                                job_id,
+                                f"⚠️ Auto-merge delayed by GitHub ({merge_res.status_code}): {err_msg}. PR #{pr_number} is open in your Feed ready for one-tap merge."
+                            )
             except Exception as e:
                 logger.error(f"Failed to create PR for job {job_id}: {e}")
                 await append_trace(db, job_id, f"Failed to create Pull Request: {e}")
         else:
             await append_trace(db, job_id, "No changes were pushed to GitHub.")
 
-        await update_job_status(db, job_id, "Completed")
+        final_job = await db.agent_jobs.find_one({"job_id": job_id}) or {}
+        if final_job.get("status") != "Merged":
+            await update_job_status(db, job_id, "Completed")
         
         # Summarize
         await append_trace(db, job_id, "Generating trajectory summary...")

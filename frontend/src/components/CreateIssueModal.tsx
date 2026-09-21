@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, FlatList, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { createIssueRemote, assignAgent, fetchUserRepos } from '../services/api';
@@ -25,6 +25,7 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('bug');
+  const [autoMerge, setAutoMerge] = useState(false);
 
   const [repos, setRepos] = useState<Repo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
@@ -64,10 +65,10 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
       if (runAgent) setLoadingJob(true);
       else setLoading(true);
 
-      const result = await createIssueRemote(repo, title, description, type);
+      const result = await createIssueRemote(repo, title, description, type, autoMerge);
 
       if (runAgent && result.issue_id) {
-        const agentResult = await assignAgent(result.issue_id, 'claude_code', repo);
+        const agentResult = await assignAgent(result.issue_id, 'claude_code', repo, autoMerge);
         onJobAssigned(agentResult.job_id);
       } else {
         onIssueCreated();
@@ -78,6 +79,7 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
       setTitle('');
       setDescription('');
       setType('bug');
+      setAutoMerge(false);
       setPickerOpen(false);
       setRepoSearch('');
       onClose();
@@ -211,6 +213,37 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
               multiline
               textAlignVertical="top"
             />
+
+            {/* Auto-Merge Toggle Card */}
+            <Pressable
+              style={[styles.autoMergeRow, autoMerge && styles.autoMergeRowActive]}
+              onPress={() => setAutoMerge(v => !v)}
+            >
+              <View style={styles.autoMergeContent}>
+                <View style={[styles.autoMergeIconBox, autoMerge && styles.autoMergeIconBoxActive]}>
+                  <Feather name="git-merge" size={16} color={autoMerge ? '#10B981' : COLORS.textSecondary} />
+                </View>
+                <View style={styles.autoMergeTextContainer}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.autoMergeTitle}>Auto-Merge PR on Success</Text>
+                    <View style={[styles.autoMergePill, autoMerge && styles.autoMergePillActive]}>
+                      <Text style={[styles.autoMergePillText, autoMerge && styles.autoMergePillTextActive]}>
+                        {autoMerge ? 'ACTIVE' : 'OFF'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.autoMergeDesc}>
+                    Automatically merges into main once agent fixes and tests succeed.
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={autoMerge}
+                onValueChange={setAutoMerge}
+                trackColor={{ false: '#E4E4E7', true: '#10B981' }}
+                thumbColor="#FFFFFF"
+              />
+            </Pressable>
 
             <View style={styles.actions}>
               <Pressable
@@ -454,5 +487,70 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  autoMergeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  autoMergeRowActive: {
+    backgroundColor: 'rgba(16,185,129,0.06)',
+    borderColor: 'rgba(16,185,129,0.4)',
+  },
+  autoMergeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  autoMergeIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoMergeIconBoxActive: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+  },
+  autoMergeTextContainer: {
+    flex: 1,
+  },
+  autoMergeTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: '#18181B',
+  },
+  autoMergeDesc: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  autoMergePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: '#E4E4E7',
+  },
+  autoMergePillActive: {
+    backgroundColor: '#10B981',
+  },
+  autoMergePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#71717A',
+    letterSpacing: 0.5,
+  },
+  autoMergePillTextActive: {
+    color: '#FFFFFF',
   },
 });

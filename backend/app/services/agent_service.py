@@ -17,6 +17,7 @@ async def assign_agent(
     agent_type: str,
     repo: str,
     user_id: str,
+    auto_merge: bool = False,
 ) -> dict:
     """Create a job record and dispatch the background worker."""
     # Import here to avoid circular dependency with agent_manager at module load
@@ -36,9 +37,10 @@ async def assign_agent(
         "traces": [],
         "summary": None,
         "follow_new_pr_format": True,
+        "auto_merge": auto_merge,
     }
     await job_repo.create_job(db, job_entry)
-    background_tasks.add_task(run_agent_job, db, job_id, issue_id, agent_type, repo, user_id)
+    background_tasks.add_task(run_agent_job, db, job_id, issue_id, agent_type, repo, user_id, auto_merge)
     return {"message": "Agent job started", "job_id": job_id}
 
 

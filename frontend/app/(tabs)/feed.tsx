@@ -13,7 +13,7 @@ import {
   fetchIssues, fetchMe, saveIssue, unsaveIssue, fetchSavedIds,
   applyIssue, logout, fetchMixedIssues, fetchPersonalPRs, fetchOrgPRs,
   fetchOrgIssues, fetchPersonalIssues,
-  approvePR, rejectPR, mergePR,
+  approvePR, rejectPR, mergePR, mergeAllPRs,
 } from '../../src/services/api';
 import CodeIssueCard from '../../src/components/CodeIssueCard';
 import ActionSidebar from '../../src/components/ActionSidebar';
@@ -42,6 +42,7 @@ export default function FeedScreen() {
   const [activeTab, setActiveTab] = useState<'org' | 'repos'>('repos');
   const [filterType, setFilterType] = useState<'prs' | 'issues'>('prs');
   const [forceReloading, setForceReloading] = useState(false);
+  const [bulkMerging, setBulkMerging] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   // CI Log modal state
@@ -287,6 +288,34 @@ export default function FeedScreen() {
     }
   }
 
+  async function handleMergeAllPRs() {
+    if (!issues || issues.length === 0) return;
+    const prIds = issues.map(i => i.issue_id);
+    Alert.alert(
+      'Merge All PRs',
+      `Are you sure you want to merge all ${prIds.length} open pull requests in this feed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Merge All',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setBulkMerging(true);
+              const res = await mergeAllPRs(prIds);
+              showToast(`Merged ${res.merged_count} of ${prIds.length} PRs successfully!`, 'success');
+              await loadIssuesForTab(activeTab, filterType, true);
+            } catch (err: any) {
+              showToast(err?.message || 'Failed to bulk merge PRs', 'error');
+            } finally {
+              setBulkMerging(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   function handleOpenCI(ciInfo: CIInfo, repo: string, branch: string) {
     setSelectedCIInfo(ciInfo);
     setCiRepoName(repo);
@@ -338,11 +367,23 @@ export default function FeedScreen() {
             onChat={() => handleChat(item)}
           />
         )}
-        pagingEnabled
+        pagingEnabled={true}
         showsVerticalScrollIndicator={false}
         snapToInterval={height}
         decelerationRate="fast"
         snapToAlignment="start"
+        disableIntervalMomentum={true}
+        scrollEventThrottle={16}
+        // @ts-ignore
+        dataSet={{ snapFeed: 'true' }}
+        style={[
+          { flex: 1 },
+          Platform.OS === 'web' && ({
+            scrollSnapType: 'y mandatory',
+            overscrollBehaviorY: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          } as any),
+        ]}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({
@@ -413,7 +454,7 @@ export default function FeedScreen() {
 
           <View style={{ flex: 1 }} />
 
-          {/* + Request & Refresh buttons */}
+          {/* + Request & Refresh buttons (Keep to Request only as requested) */}
           <View style={styles.actionGroup}>
             <Pressable
               style={styles.compactCreateBtn}
@@ -598,26 +639,27 @@ const styles = StyleSheet.create({
   compactHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 8,
-    gap: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
   },
   scopeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: BORDER_RADIUS.full,
-    padding: 2.5,
+    padding: 2,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
+    flexShrink: 0,
   },
   scopeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: BORDER_RADIUS.full,
   },
   scopeBtnActive: {
@@ -629,7 +671,7 @@ const styles = StyleSheet.create({
   },
   scopeText: {
     color: '#71717A',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -640,12 +682,13 @@ const styles = StyleSheet.create({
   typeSegment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 4,
+    gap: 4,
+    paddingHorizontal: 0,
+    flexShrink: 0,
   },
   typeBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     position: 'relative',
   },
   typeBtnActive: {
@@ -654,7 +697,7 @@ const styles = StyleSheet.create({
   },
   typeBtnText: {
     color: '#71717A',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
   },
   typeBtnTextActive: {
@@ -664,20 +707,22 @@ const styles = StyleSheet.create({
   actionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
+    flexShrink: 0,
   },
   compactCreateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: '#18181B',
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.full,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    flexShrink: 0,
   },
   compactCreateText: {
     color: '#FFFFFF',
@@ -697,6 +742,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
+    flexShrink: 0,
   },
   emptyContainer: {
     justifyContent: 'center',

@@ -225,7 +225,7 @@ def create_app() -> FastAPI:
             app.mount("/icons", StaticFiles(directory=str(icons_dir)), name="icons_static")
 
         # PWA-specific endpoints with mandatory caching and scoping headers
-        @app.get("/sw.js")
+        @app.api_route("/sw.js", methods=["GET", "HEAD"])
         async def serve_service_worker():
             sw_file = frontend_dist / "sw.js"
             if sw_file.is_file():
@@ -239,7 +239,7 @@ def create_app() -> FastAPI:
                 )
             return {"error": "Service worker not found"}
 
-        @app.get("/manifest.json")
+        @app.api_route("/manifest.json", methods=["GET", "HEAD"])
         async def serve_manifest():
             manifest_file = frontend_dist / "manifest.json"
             if manifest_file.is_file():
@@ -250,14 +250,14 @@ def create_app() -> FastAPI:
                 )
             return {"error": "Manifest not found"}
 
-        @app.get("/offline.html")
+        @app.api_route("/offline.html", methods=["GET", "HEAD"])
         async def serve_offline():
             offline_file = frontend_dist / "offline.html"
             if offline_file.is_file():
                 return FileResponse(offline_file, media_type="text/html")
             return {"error": "Offline page not found"}
 
-        @app.get("/favicon.ico")
+        @app.api_route("/favicon.ico", methods=["GET", "HEAD"])
         async def serve_favicon_ico():
             ico_file = frontend_dist / "favicon.ico"
             if ico_file.is_file():
@@ -268,7 +268,7 @@ def create_app() -> FastAPI:
                 )
             return {"error": "favicon.ico not found"}
 
-        @app.get("/favicon.png")
+        @app.api_route("/favicon.png", methods=["GET", "HEAD"])
         async def serve_favicon_png():
             png_file = frontend_dist / "favicon.png"
             if png_file.is_file():
@@ -279,7 +279,7 @@ def create_app() -> FastAPI:
                 )
             return {"error": "favicon.png not found"}
 
-        @app.get("/{full_path:path}")
+        @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
         async def serve_spa_app(full_path: str):
             if full_path.startswith("api") or full_path in ["docs", "openapi.json", "redoc", "health"]:
                 return {"error": "Not found"}

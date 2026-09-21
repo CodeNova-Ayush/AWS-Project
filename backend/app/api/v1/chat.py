@@ -35,6 +35,8 @@ async def send_chat_message(
     if not issue:
         if body.issue_context:
             issue = body.issue_context
+        else:
+            raise HTTPException(status_code=404, detail="Issue not found")
     return await chat_service.send_message(
         db,
         issue_id,
