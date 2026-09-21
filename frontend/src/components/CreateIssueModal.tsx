@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, FlatList, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
-import { createIssueRemote, assignAgent, fetchUserRepos } from '../services/api';
+import { createIssueRemote, assignAgent, fetchUserRepos, getUserKeyStatus } from '../services/api';
 
 type IssueType = 'bug' | 'suggestion' | 'performance';
 
@@ -21,6 +22,8 @@ interface CreateIssueModalProps {
 }
 
 export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJobAssigned }: CreateIssueModalProps) {
+  const router = useRouter();
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [repo, setRepo] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -35,7 +38,7 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
   const [loading, setLoading] = useState(false);
   const [loadingJob, setLoadingJob] = useState(false);
 
-  // Load repos when modal opens
+  // Load repos & API key status when modal opens
   useEffect(() => {
     if (!visible) return;
     setReposLoading(true);
@@ -43,6 +46,17 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
       .then(setRepos)
       .catch(() => setRepos([]))
       .finally(() => setReposLoading(false));
+
+    getUserKeyStatus()
+      .then(status => {
+        const isConfigured = Boolean(
+          status?.has_openai_key ||
+          status?.has_anthropic_key ||
+          (status?.providers && Object.values(status.providers).some((p: any) => p?.configured))
+        );
+        setHasApiKey(isConfigured);
+      })
+      .catch(() => setHasApiKey(false));
   }, [visible]);
 
   const filteredRepos = repos.filter(r =>
@@ -56,6 +70,25 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
   }
 
   async function handleCreate(runAgent: boolean) {
+    if (runAgent && hasApiKey === false) {
+      Alert.alert(
+        'API Key Required',
+        'An API key is required to launch autonomous AI agents. Please configure your key in Settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Add API Key',
+            style: 'default',
+            onPress: () => {
+              onClose();
+              router.push('/(tabs)/profile');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     if (!repo.trim() || !title.trim()) {
       Alert.alert('Missing Fields', 'Repository and Title are required.');
       return;
@@ -245,21 +278,65 @@ export default function CreateIssueModal({ visible, onClose, onIssueCreated, onJ
               />
             </Pressable>
 
+            {/* Missing API Key Notice */}
+            {hasApiKey === false && (
+              <View style={styles.apiKeyNoticeCard}>
+                <View style={styles.apiKeyNoticeHeader}>
+                  <View style={styles.apiKeyNoticeIconWrap}>
+                    <Feather name="alert-triangle" size={16} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.apiKeyNoticeTitle}>API Key Required for AI Agent</Text>
+                    <Text style={styles.apiKeyNoticeDesc}>
+                      Autonomous AI agents require an active LLM provider API key to analyze code and create pull requests.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.apiKeyNoticeBtn}
+                  onPress={() => {
+                    onClose();
+                    router.push('/(tabs)/profile');
+                  }}
+                  testID="create-modal-add-key-btn"
+                >
+                  <Feather name="key" size={14} color="#FFFFFF" />
+                  <Text style={styles.apiKeyNoticeBtnText}>Add API Key in Settings</Text>
+                  <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            )}
+
             <View style={styles.actions}>
-              <Pressable
-                style={[styles.submitButton, styles.jobButton, (loading || loadingJob) && { opacity: 0.7 }]}
-                onPress={() => handleCreate(true)}
-                disabled={loading || loadingJob}
-              >
-                {loadingJob ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Feather name="cpu" size={18} color="#FFFFFF" />
-                    <Text style={[styles.submitText, { color: '#FFFFFF' }]}>Fire Agent</Text>
-                  </>
-                )}
-              </Pressable>
+              {hasApiKey === false ? (
+                <Pressable
+                  style={[styles.submitButton, styles.jobButton]}
+                  onPress={() => {
+                    onClose();
+                    router.push('/(tabs)/profile');
+                  }}
+                  testID="create-modal-redirect-btn"
+                >
+                  <Feather name="key" size={16} color="#FFFFFF" />
+                  <Text style={[styles.submitText, { color: '#FFFFFF' }]}>Add API Key to Fire Agent</Text>
+                  <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={[styles.submitButton, styles.jobButton, (loading || loadingJob) && { opacity: 0.7 }]}
+                  onPress={() => handleCreate(true)}
+                  disabled={loading || loadingJob}
+                >
+                  {loadingJob ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Feather name="cpu" size={18} color="#FFFFFF" />
+                      <Text style={[styles.submitText, { color: '#FFFFFF' }]}>Fire Agent</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
 
               <Pressable
                 style={[styles.submitButton, styles.onlyIssueButton, (loading || loadingJob) && { opacity: 0.7 }]}
@@ -552,5 +629,58 @@ const styles = StyleSheet.create({
   },
   autoMergePillTextActive: {
     color: '#FFFFFF',
+  },
+
+  // ── Missing API Key Notice Card ──
+  apiKeyNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  apiKeyNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  apiKeyNoticeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apiKeyNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  apiKeyNoticeDesc: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  apiKeyNoticeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    ...SHADOWS.sm,
+  },
+  apiKeyNoticeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

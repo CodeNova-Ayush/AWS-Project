@@ -196,15 +196,17 @@ async def send_message(
         logger.error("Chat error (%s - %s): %s", resolved_provider, resolved_model, exc)
         exc_str = str(exc)
         if "401" in exc_str or "API key" in exc_str or "AuthenticationError" in exc_str:
-            ai_response = f"Invalid or expired API key for {resolved_provider.capitalize()}. Please check your API key in Profile settings."
+            ai_response = f"⚠️ Invalid or expired API key for {resolved_provider.capitalize()}. Please configure your API key in Profile settings."
         elif "403" in exc_str and "tier_not_allowed" in exc_str:
-            ai_response = f"⚠️ Model '{resolved_model}' is not available in your {resolved_provider.capitalize()} subscription tier. Please select 'codestral-latest' or 'open-mistral-7b' in Profile settings."
+            ai_response = f"⚠️ Model '{resolved_model}' is not available in your {resolved_provider.capitalize()} subscription tier. Please select an active model in Profile settings."
         elif "404" in exc_str and "model_not_found" in exc_str:
-            ai_response = f"⚠️ Model '{resolved_model}' was not found on {resolved_provider.capitalize()}. Please tap 'Fetch Live Models' in Profile to pick an active model."
+            ai_response = f"⚠️ Model '{resolved_model}' was not found on {resolved_provider.capitalize()}. Please configure your model or API key in Profile settings."
+        elif "403" in exc_str:
+            ai_response = f"⚠️ Access forbidden for {resolved_provider.capitalize()} ({resolved_model}). Please verify your API key in Profile settings."
         elif "quota" in exc_str.lower() or "429" in exc_str or "rate limit" in exc_str.lower():
-            ai_response = f"⚠️ {resolved_provider.capitalize()} API rate limit or quota exceeded. Please wait a moment or check your account usage."
+            ai_response = f"⚠️ {resolved_provider.capitalize()} API rate limit or quota exceeded. Please check your account in Profile settings."
         else:
-            ai_response = f"Error communicating with {resolved_provider.capitalize()} ({resolved_model}): {exc}"
+            ai_response = f"⚠️ Error communicating with {resolved_provider.capitalize()} ({resolved_model}): {exc}. Please verify in Profile settings."
 
     # 7. Persist assistant response
     reply_ts = datetime.now(timezone.utc).isoformat()

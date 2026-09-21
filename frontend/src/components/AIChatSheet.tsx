@@ -5,6 +5,7 @@ import {
   Modal, ScrollView,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { ChatMessage, CodeIssue } from '../constants/types';
@@ -42,6 +43,31 @@ const QUICK_ACTIONS = [
   },
 ];
 
+function isConfigNotice(content?: string): boolean {
+  if (!content) return false;
+  const c = content.toLowerCase();
+  return (
+    c.includes('profile') ||
+    c.includes('settings') ||
+    c.includes('api key') ||
+    c.includes('apikey') ||
+    c.includes('model') ||
+    c.includes('not found') ||
+    c.includes('invalid') ||
+    c.includes('expired') ||
+    c.includes('quota') ||
+    c.includes('rate limit') ||
+    c.includes('forbidden') ||
+    c.includes('error') ||
+    c.includes('tier') ||
+    c.includes('something went wrong') ||
+    c.includes('groq') ||
+    c.includes('openai') ||
+    c.includes('anthropic') ||
+    content.includes('⚠️')
+  );
+}
+
 interface Props {
   issueId: string;
   issue: CodeIssue;
@@ -51,12 +77,14 @@ interface Props {
 
 export default function AIChatSheet({ issueId, issue, visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [activeProvider, setActiveProvider] = useState<string>('groq');
-  const [activeModel, setActiveModel] = useState<string>('llama-3.3-70b-versatile');
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [activeProvider, setActiveProvider] = useState<string>('');
+  const [activeModel, setActiveModel] = useState<string>('');
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -70,11 +98,24 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
     try {
       const status = await getUserKeyStatus();
       if (status) {
-        if (status.active_provider) setActiveProvider(status.active_provider);
-        if (status.active_model) setActiveModel(status.active_model);
+        const isConfigured = Boolean(
+          status.has_openai_key ||
+          status.has_anthropic_key ||
+          (status.providers && Object.values(status.providers).some((p: any) => p?.configured))
+        );
+        setHasApiKey(isConfigured);
+        if (isConfigured) {
+          if (status.active_provider) setActiveProvider(status.active_provider);
+          if (status.active_model) setActiveModel(status.active_model);
+        } else {
+          setActiveProvider('');
+          setActiveModel('');
+        }
+      } else {
+        setHasApiKey(false);
       }
     } catch {
-      // Keep defaults
+      setHasApiKey(false);
     }
   }
 
@@ -102,6 +143,21 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
       timestamp: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMessage]);
+
+    // If no API key is configured, do not attempt to contact LLM backend; show redirect notice
+    if (!hasApiKey) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'An API key is required to review this pull request and answer questions about the code. Please add your API key in Settings to get started.',
+          timestamp: new Date().toISOString(),
+          needsApiKey: true,
+        },
+      ]);
+      return;
+    }
+
     setLoading(true);
 
     const issueContext = {
@@ -128,6 +184,7 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
         timestamp: new Date().toISOString(),
         provider: activeProvider,
         model: activeModel,
+        needsApiKey: true,
       }]);
     } finally {
       setLoading(false);
@@ -161,9 +218,23 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
               </View>
               <View style={styles.headerLabels}>
                 <Text style={styles.sheetTitle} numberOfLines={1}>{issue.title}</Text>
-                <Text style={styles.sheetSubtitle}>{issue.project} · {activeProvider.toUpperCase()} ({activeModel})</Text>
+                <Text style={styles.sheetSubtitle}>
+                  {issue.project} · {hasApiKey && activeProvider ? `${activeProvider.toUpperCase()}${activeModel ? ` (${activeModel})` : ''}` : 'No API Key'}
+                </Text>
               </View>
             </View>
+            <Pressable
+              onPress={() => {
+                onClose();
+                router.push('/(tabs)/profile');
+              }}
+              style={styles.headerConfigBtn}
+              hitSlop={8}
+              testID="chat-header-settings-btn"
+            >
+              <Feather name="key" size={12} color="#FFFFFF" />
+              <Text style={styles.headerConfigBtnText}>API Key</Text>
+            </Pressable>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn} testID="close-chat">
               <Feather name="x" size={18} color={COLORS.textSecondary} />
             </Pressable>
@@ -193,6 +264,36 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                       Ask anything or tap a one-click review action:
                     </Text>
                   </View>
+
+                  {/* If user has not configured an API key, show notice card with direct redirect button */}
+                  {hasApiKey === false && (
+                    <View style={styles.apiKeyNoticeCard}>
+                      <View style={styles.apiKeyNoticeHeader}>
+                        <View style={styles.apiKeyNoticeIconWrap}>
+                          <Feather name="key" size={16} color="#D97706" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.apiKeyNoticeTitle}>API Key Required</Text>
+                          <Text style={styles.apiKeyNoticeDesc}>
+                            To inspect code, detect bugs, and chat with AI, add your API key in Settings.
+                          </Text>
+                        </View>
+                      </View>
+                      <Pressable
+                        style={styles.apiKeyNoticeBtn}
+                        onPress={() => {
+                          onClose();
+                          router.push('/(tabs)/profile');
+                        }}
+                        testID="empty-add-api-key-btn"
+                      >
+                        <Feather name="plus-circle" size={14} color="#FFFFFF" />
+                        <Text style={styles.apiKeyNoticeBtnText}>Add API Key in Settings</Text>
+                        <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                      </Pressable>
+                    </View>
+                  )}
+
                   <View style={styles.promptCardsGrid}>
                     {QUICK_ACTIONS.map(action => (
                       <Pressable
@@ -209,31 +310,57 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
                       </Pressable>
                     ))}
                   </View>
-                  <View style={styles.contextChip}>
-                    <Feather name="zap" size={11} color={COLORS.primary} />
-                    <Text style={styles.contextChipText}>Context loaded · {activeProvider.toUpperCase()}</Text>
-                  </View>
                 </View>
               }
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.messageBubble,
-                    item.role === 'user' ? styles.userBubble : styles.aiBubble,
-                  ]}
-                  testID={`chat-message-${item.role}`}
-                >
-                  {item.role === 'assistant' && (
-                    <View style={styles.aiLabel}>
-                      <Ionicons name="chatbubbles" size={10} color={COLORS.primary} />
-                      <Text style={styles.aiLabelText}>
-                        {item.provider ? `${item.provider.toUpperCase()}${item.model ? ` · ${item.model}` : ''}` : `${activeProvider.toUpperCase()} · ${activeModel}`}
-                      </Text>
-                    </View>
-                  )}
-                  <MarkdownMessage content={item.content} isUser={item.role === 'user'} />
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const isAssistant = item.role === 'assistant';
+                const showRedirect = isAssistant && (
+                  item.needsApiKey ||
+                  !hasApiKey ||
+                  isConfigNotice(item.content)
+                );
+                const isKeySpecific = !hasApiKey || item.needsApiKey || item.content?.toLowerCase().includes('api key');
+
+                return (
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      item.role === 'user' ? styles.userBubble : styles.aiBubble,
+                    ]}
+                    testID={`chat-message-${item.role}`}
+                  >
+                    {isAssistant && (
+                      <View style={styles.aiLabel}>
+                        <Ionicons name="chatbubbles" size={10} color={COLORS.primary} />
+                        <Text style={styles.aiLabelText}>
+                          {item.provider
+                            ? `${item.provider.toUpperCase()}${item.model ? ` · ${item.model}` : ''}`
+                            : (hasApiKey && activeProvider ? `${activeProvider.toUpperCase()} · ${activeModel}` : 'MergeDeck Intelligence')}
+                        </Text>
+                      </View>
+                    )}
+                    <MarkdownMessage content={item.content} isUser={item.role === 'user'} />
+
+                    {/* Prominent redirect button inside the chat bubble */}
+                    {showRedirect && (
+                      <Pressable
+                        style={styles.bubbleRedirectBtn}
+                        onPress={() => {
+                          onClose();
+                          router.push('/(tabs)/profile');
+                        }}
+                        testID="chat-bubble-add-key-btn"
+                      >
+                        <Feather name={isKeySpecific ? "key" : "sliders"} size={14} color="#FFFFFF" />
+                        <Text style={styles.bubbleRedirectBtnText}>
+                          {isKeySpecific ? 'Add API Key in Settings' : 'Configure in Profile Settings'}
+                        </Text>
+                        <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              }}
             />
           )}
 
@@ -241,8 +368,24 @@ export default function AIChatSheet({ issueId, issue, visible, onClose }: Props)
           {loading && (
             <View style={styles.typingIndicator}>
               <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.typingText}>{activeProvider.toUpperCase()} is analyzing PR…</Text>
+              <Text style={styles.typingText}>{(activeProvider || 'AI').toUpperCase()} is analyzing PR…</Text>
             </View>
+          )}
+
+          {/* If no API key is configured or a configuration/error notice is present, show persistent banner right above the chips */}
+          {(hasApiKey === false || messages.some(m => m.role === 'assistant' && isConfigNotice(m.content))) && (
+            <Pressable
+              style={styles.apiKeyBar}
+              onPress={() => {
+                onClose();
+                router.push('/(tabs)/profile');
+              }}
+              testID="chat-bottom-add-key-banner"
+            >
+              <Feather name="key" size={13} color="#D97706" />
+              <Text style={styles.apiKeyBarText}>Manage API keys & models in Profile Settings</Text>
+              <Feather name="chevron-right" size={14} color="#D97706" />
+            </Pressable>
           )}
 
           {/* Quick prompt chips bar */}
@@ -369,6 +512,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.06)',
   },
+  headerConfigBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginRight: 4,
+  },
+  headerConfigBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 
   // ── Loading / Empty ──
   loadingContainer: {
@@ -394,21 +552,97 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     fontWeight: '500',
   },
-  contextChip: {
+
+  // ── Missing API Key Notice Card ──
+  apiKeyNoticeCard: {
+    width: '100%',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    marginBottom: SPACING.sm,
+  },
+  apiKeyNoticeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: `${COLORS.primary}12`,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    gap: 10,
   },
-  contextChipText: {
-    color: COLORS.primary,
-    fontSize: FONT_SIZES.xs,
+  apiKeyNoticeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apiKeyNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  apiKeyNoticeDesc: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  apiKeyNoticeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    ...SHADOWS.sm,
+  },
+  apiKeyNoticeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ── Inline bubble redirect button ──
+  bubbleRedirectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    ...SHADOWS.sm,
+  },
+  bubbleRedirectBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ── Slim bottom warning bar ──
+  apiKeyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: '#FDE68A',
+  },
+  apiKeyBarText: {
+    color: '#92400E',
+    fontSize: 11,
     fontWeight: '600',
+    flex: 1,
+    marginLeft: 6,
   },
 
   // ── Bubbles ──

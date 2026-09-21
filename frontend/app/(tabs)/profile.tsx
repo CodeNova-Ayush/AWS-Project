@@ -11,6 +11,7 @@ import {
   Platform,
   Switch,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,6 +20,7 @@ import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import CodeBackground from '../../src/components/CodeBackground';
+import Toast, { ToastType } from '../../src/components/Toast';
 import {
   fetchMe,
   logout,
@@ -139,6 +141,22 @@ export default function ProfileScreen() {
   const [diffDensity, setDiffDensity] = useState<'compact' | 'comfortable'>('comfortable');
   const [isStandalonePWA, setIsStandalonePWA] = useState(false);
 
+  // Delete confirmation modal state
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [providerToDelete, setProviderToDelete] = useState<string | null>(null);
+  const [isDeletingKey, setIsDeletingKey] = useState(false);
+
+  // Toast feedback state
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<ToastType>('info');
+  const [toastVisible, setToastVisible] = useState(false);
+
+  function showToast(msg: string, type: ToastType = 'info') {
+    setToastMessage(msg);
+    setToastType(type);
+    setToastVisible(true);
+  }
+
   useEffect(() => {
     loadUser();
     loadPreferences();
@@ -212,7 +230,7 @@ export default function ProfileScreen() {
 
   async function handleSaveProvider() {
     if (!apiKeyInput.trim()) {
-      Alert.alert('Missing API Key', 'Please enter an API key for ' + (currentPreset?.name || 'this provider'));
+      showToast('Please enter an API key for ' + (currentPreset?.name || 'this provider'), 'error');
       return;
     }
     setSavingKeys(true);
@@ -227,9 +245,9 @@ export default function ProfileScreen() {
       const updatedStatus = await getUserKeyStatus();
       setKeyStatus(updatedStatus);
       setApiKeyInput('');
-      Alert.alert('Saved & Activated', `${currentPreset?.name || selectedProviderId} is now active for AI chat & agents.`);
+      showToast(`${currentPreset?.name || selectedProviderId} key saved & activated!`, 'success');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to save provider key.');
+      showToast(err.message || 'Failed to save provider key', 'error');
     } finally {
       setSavingKeys(false);
     }
@@ -241,32 +259,37 @@ export default function ProfileScreen() {
       await setActiveProvider(pId, currentModel);
       const updatedStatus = await getUserKeyStatus();
       setKeyStatus(updatedStatus);
+      const pName = PROVIDER_PRESETS.find((p) => p.id === pId)?.name || pId;
+      showToast(`Switched active engine to ${pName}`, 'success');
     } catch {
-      Alert.alert('Error', 'Failed to switch active provider.');
+      showToast('Failed to switch active provider', 'error');
     }
   }
 
-  async function handleDeleteProvider(pId: string) {
-    const pName = PROVIDER_PRESETS.find((p) => p.id === pId)?.name || pId;
-    Alert.alert(`Delete ${pName} Key?`, `Remove stored credentials for ${pName}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteProviderKey(pId);
-            const updated = await getUserKeyStatus();
-            setKeyStatus(updated);
-            if (pId === selectedProviderId) {
-              setApiKeyInput('');
-            }
-          } catch {
-            Alert.alert('Error', 'Failed to delete key.');
-          }
-        },
-      },
-    ]);
+  function handleDeleteProvider(pId: string) {
+    setProviderToDelete(pId);
+    setDeleteModalVisible(true);
+  }
+
+  async function confirmDeleteProvider() {
+    if (!providerToDelete) return;
+    setIsDeletingKey(true);
+    const pName = PROVIDER_PRESETS.find((p) => p.id === providerToDelete)?.name || providerToDelete;
+    try {
+      await deleteProviderKey(providerToDelete);
+      const updated = await getUserKeyStatus();
+      setKeyStatus(updated);
+      if (providerToDelete === selectedProviderId) {
+        setApiKeyInput('');
+      }
+      showToast(`${pName} credentials removed`, 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete key', 'error');
+    } finally {
+      setIsDeletingKey(false);
+      setDeleteModalVisible(false);
+      setProviderToDelete(null);
+    }
   }
 
   async function handleLogout() {
@@ -429,7 +452,13 @@ export default function ProfileScreen() {
                 </View>
 
                 {isSelectedConfigured && (
-                  <Pressable style={styles.trashBtn} onPress={() => handleDeleteProvider(selectedProviderId)}>
+                  <Pressable
+                    style={styles.trashBtn}
+                    onPress={() => handleDeleteProvider(selectedProviderId)}
+                    hitSlop={10}
+                    testID="delete-provider-btn"
+                    accessibilityLabel={`Delete ${currentPreset.name} API Key`}
+                  >
                     <Feather name="trash-2" size={16} color={COLORS.error} />
                   </Pressable>
                 )}
@@ -729,6 +758,78 @@ export default function ProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Delete Provider Key Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isDeletingKey) {
+            setDeleteModalVisible(false);
+            setProviderToDelete(null);
+          }
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            if (!isDeletingKey) {
+              setDeleteModalVisible(false);
+              setProviderToDelete(null);
+            }
+          }}
+        >
+          <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalIconWrap}>
+              <Feather name="trash-2" size={24} color="#EF4444" />
+            </View>
+            <Text style={styles.modalTitle}>
+              Remove {PROVIDER_PRESETS.find((p) => p.id === providerToDelete)?.name || 'Provider'} Key?
+            </Text>
+            <Text style={styles.modalDesc}>
+              This will remove your stored API credentials for {PROVIDER_PRESETS.find((p) => p.id === providerToDelete)?.name || 'this provider'}. If this is your active engine, MergeDeck will automatically fallback to an available provider.
+            </Text>
+
+            <View style={styles.modalActionRow}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setProviderToDelete(null);
+                }}
+                disabled={isDeletingKey}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalDeleteBtn, isDeletingKey && { opacity: 0.7 }]}
+                onPress={confirmDeleteProvider}
+                disabled={isDeletingKey}
+                testID="confirm-delete-key-btn"
+              >
+                {isDeletingKey ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="trash-2" size={14} color="#FFFFFF" />
+                    <Text style={styles.modalDeleteText}>Delete Key</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Floating Toast notification */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1400,5 +1501,95 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // ── Delete Confirmation Modal ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    // @ts-ignore
+    backdropFilter: 'blur(8px)',
+  },
+  modalContainer: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#18181B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 13,
+    color: '#71717A',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 22,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#FAF8F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#71717A',
+  },
+  modalDeleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modalDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

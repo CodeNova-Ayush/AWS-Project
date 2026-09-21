@@ -7,7 +7,7 @@ import { COLORS } from '../constants/theme';
 
 // Map Expo Router tab route names to icons
 const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  feed:     'layers',
+  feed:     'home',
   sessions: 'activity',
   saved:    'bookmark',
   profile:  'user',

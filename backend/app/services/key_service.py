@@ -18,7 +18,7 @@ DEFAULT_PROVIDER_CONFIGS: Dict[str, Dict[str, str]] = {
     "groq": {
         "name": "Groq",
         "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.1-8b-instant",
+        "default_model": "llama-3.3-70b-versatile",
     },
     "mistral": {
         "name": "Mistral AI",

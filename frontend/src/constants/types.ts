@@ -57,6 +57,7 @@ export interface ChatMessage {
   timestamp: string;
   provider?: string;
   model?: string;
+  needsApiKey?: boolean;
 }
 
 export interface User {

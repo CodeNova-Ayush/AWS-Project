@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ActivityIndicator, Alert, Switch } from 'react-native';
 import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
-import { assignAgent } from '../services/api';
+import { assignAgent, getUserKeyStatus } from '../services/api';
 
 interface Props {
   issueId: string;
@@ -15,11 +16,46 @@ interface Props {
 type AgentType = 'codex' | 'opencode' | 'claude_code' | 'kiro';
 
 export default function AssignAgentModal({ issueId, repoName, visible, onClose, onAssigned }: Props) {
+  const router = useRouter();
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentType>('codex');
   const [autoMerge, setAutoMerge] = useState(false);
 
+  useEffect(() => {
+    if (!visible) return;
+    getUserKeyStatus()
+      .then(status => {
+        const isConfigured = Boolean(
+          status?.has_openai_key ||
+          status?.has_anthropic_key ||
+          (status?.providers && Object.values(status.providers).some((p: any) => p?.configured))
+        );
+        setHasApiKey(isConfigured);
+      })
+      .catch(() => setHasApiKey(false));
+  }, [visible]);
+
   async function handleAssign() {
+    if (hasApiKey === false) {
+      Alert.alert(
+        'API Key Required',
+        'An API key is required to assign background agents. Please configure your key in Settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Add API Key',
+            style: 'default',
+            onPress: () => {
+              onClose();
+              router.push('/(tabs)/profile');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await assignAgent(issueId, selectedAgent, repoName, autoMerge);
@@ -44,6 +80,35 @@ export default function AssignAgentModal({ issueId, repoName, visible, onClose, 
           </View>
 
           <Text style={styles.subtitle}>Select the background agent to investigate and resolve this issue.</Text>
+
+          {/* Missing API Key Notice */}
+          {hasApiKey === false && (
+            <View style={styles.apiKeyNoticeCard}>
+              <View style={styles.apiKeyNoticeHeader}>
+                <View style={styles.apiKeyNoticeIconWrap}>
+                  <Feather name="alert-triangle" size={16} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.apiKeyNoticeTitle}>API Key Required</Text>
+                  <Text style={styles.apiKeyNoticeDesc}>
+                    An API key is required to assign background agents. Please configure your key in Settings.
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                style={styles.apiKeyNoticeBtn}
+                onPress={() => {
+                  onClose();
+                  router.push('/(tabs)/profile');
+                }}
+                testID="assign-modal-add-key-btn"
+              >
+                <Feather name="key" size={14} color="#FFFFFF" />
+                <Text style={styles.apiKeyNoticeBtnText}>Add API Key in Settings</Text>
+                <Feather name="arrow-right" size={14} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          )}
 
           <Pressable
             style={[styles.agentRow, selectedAgent === 'codex' && styles.agentRowSelected]}
@@ -136,13 +201,28 @@ export default function AssignAgentModal({ issueId, repoName, visible, onClose, 
             <Pressable style={styles.cancelButton} onPress={onClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
-            <Pressable style={[styles.assignButton, loading && styles.buttonDisabled]} onPress={handleAssign} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#000" size="small" />
-              ) : (
-                <Text style={styles.assignButtonText}>Assign Agent</Text>
-              )}
-            </Pressable>
+            {hasApiKey === false ? (
+              <Pressable
+                style={[styles.assignButton, { backgroundColor: '#4F46E5', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                onPress={() => {
+                  onClose();
+                  router.push('/(tabs)/profile');
+                }}
+                testID="assign-modal-redirect-btn"
+              >
+                <Feather name="key" size={14} color="#FFFFFF" />
+                <Text style={[styles.assignButtonText, { color: '#FFFFFF' }]}>Add API Key</Text>
+                <Feather name="arrow-right" size={14} color="#FFFFFF" />
+              </Pressable>
+            ) : (
+              <Pressable style={[styles.assignButton, loading && styles.buttonDisabled]} onPress={handleAssign} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#000" size="small" />
+                ) : (
+                  <Text style={styles.assignButtonText}>Assign Agent</Text>
+                )}
+              </Pressable>
+            )}
           </View>
         </Pressable>
       </Pressable>
@@ -339,5 +419,57 @@ const styles = StyleSheet.create({
   },
   autoMergePillTextActive: {
     color: '#FFFFFF',
+  },
+
+  // ── Missing API Key Notice Card ──
+  apiKeyNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    marginBottom: SPACING.md,
+  },
+  apiKeyNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  apiKeyNoticeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apiKeyNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  apiKeyNoticeDesc: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  apiKeyNoticeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    ...SHADOWS.sm,
+  },
+  apiKeyNoticeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
