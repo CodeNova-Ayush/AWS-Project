@@ -4,6 +4,7 @@ Handles fetching repos, PRs, files, and converting GitHub data to CodeTok format
 Moved from root github_api.py — config sourced from app.core.config.settings.
 """
 
+import asyncio
 import httpx
 from typing import List, Dict, Any, Optional
 

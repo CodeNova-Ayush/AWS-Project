@@ -53,7 +53,11 @@ export interface CodeIssue {
   github_mergeable_state?: string;
   has_conflicts?: boolean;
   github_draft?: boolean;
+  status?: string;
+  merged?: boolean;
+  merged_at?: string;
 }
+
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
