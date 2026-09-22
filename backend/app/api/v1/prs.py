@@ -1,6 +1,7 @@
 """PR action routes — approve, reject, merge."""
 
 import logging
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,10 +19,8 @@ logger = logging.getLogger(__name__)
 
 async def _invalidate_pr_caches(db, user: dict) -> None:
     """Bust both org and personal PR caches so the next fetch gets live data."""
-    user_id = user.get("user_id", "")
-    await issue_repo.invalidate_cache(db, "prs_org")
-    if user_id:
-        await issue_repo.invalidate_cache(db, f"prs_personal_{user_id}")
+    await issue_repo.invalidate_all_pr_caches(db)
+
 
 
 def _require_github_token(user: dict) -> str:
@@ -150,7 +149,7 @@ async def merge_all_prs(
     issue_ids = body_data.get("issue_ids", [])
     merge_method = body_data.get("merge_method", "squash")
     
-    results = []
+    results: list[dict[str, Any]] = []
     for issue_id in issue_ids:
         try:
             res = await pr_service.merge_pr(

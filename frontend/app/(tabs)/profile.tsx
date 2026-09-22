@@ -731,21 +731,7 @@ export default function ProfileScreen() {
                   style={styles.installPwaRowBtn}
                   onPress={() => {
                     if (typeof window !== 'undefined') {
-                      const ua = navigator.userAgent.toLowerCase();
-                      const isIos = /iphone|ipad|ipod/.test(ua);
-                      if (isIos) {
-                        Alert.alert(
-                          'Install on iPhone / iPad',
-                          '1. In Safari, tap the Share button (square with arrow pointing up).\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" in the top right.\n\nMergeDeck will launch full-screen from your home screen!',
-                          [{ text: 'Got it' }]
-                        );
-                      } else {
-                        Alert.alert(
-                          'Install on Android / Chrome',
-                          '1. In Chrome, tap the three dots menu (⋮) in the top-right corner.\n2. Tap "Install app" or "Add to Home screen".\n3. Tap "Install".\n\nMergeDeck will appear in your app drawer and home screen!',
-                          [{ text: 'Got it' }]
-                        );
-                      }
+                      window.dispatchEvent(new CustomEvent('open-pwa-install-modal'));
                     }
                   }}
                 >

@@ -37,5 +37,27 @@ class TestAgentJobs:
         trace_data = trace_response.json()
         
         assert trace_data["job_id"] == job_id
-        assert trace_data["status"] in ["Pending", "Running", "Completed", "Failed"]
+        assert trace_data["status"] in ["Pending", "Running", "Completed", "Failed", "Merged"]
         assert "traces" in trace_data
+
+    def test_assign_agent_to_pr_with_auto_merge(self, base_url, auth_client):
+        """Test assigning agent to an existing PR with auto_merge enabled"""
+        assign_response = auth_client.post(
+            f"{base_url}/api/agents/assign",
+            json={
+                "issue_id": "gh_pr_test-owner_test-repo_42",
+                "agent_type": "opencode",
+                "repo": "test-owner/test-repo",
+                "auto_merge": True,
+            }
+        )
+        assert assign_response.status_code == 200
+        assign_data = assign_response.json()
+        assert "job_id" in assign_data
+        job_id = assign_data["job_id"]
+
+        trace_response = auth_client.get(f"{base_url}/api/jobs/{job_id}/trace")
+        assert trace_response.status_code == 200
+        trace_data = trace_response.json()
+        assert trace_data["auto_merge"] is True
+        assert trace_data["issue_id"] == "gh_pr_test-owner_test-repo_42"

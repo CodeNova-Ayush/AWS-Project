@@ -13,9 +13,67 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL = 300  # 5 minutes
-PR_CACHE_TTL = 3600  # 1 hour
-ISSUE_CACHE_TTL = 900  # 15 minutes
+CACHE_TTL = 30  # 30 seconds
+PR_CACHE_TTL = 30  # 30 seconds
+ISSUE_CACHE_TTL = 30  # 30 seconds
+
+
+async def _convert_prs_parallel(
+    prs: List[dict], owner: str, repo_name: str, token: str, limit: int = 30
+) -> List[dict]:
+    """Convert open pull requests to CodeTok issue cards concurrently."""
+    prs_to_process = [
+        pr for pr in prs[:limit]
+        if pr.get("state") == "open" and not pr.get("merged_at") and not pr.get("merged")
+    ]
+    if not prs_to_process:
+        return []
+    sem = asyncio.Semaphore(10)
+
+    async def _safe_conv(pr):
+        async with sem:
+            try:
+                return await github_api.convert_pr_to_issue(pr, owner, repo_name, token)
+            except Exception as ex:
+                logger.warning("Failed to convert PR #%s in %s/%s: %s", pr.get("number"), owner, repo_name, ex)
+                return None
+
+    converted = await asyncio.gather(*[_safe_conv(p) for p in prs_to_process])
+    return [c for c in converted if c is not None]
+
+
+async def _filter_out_merged_prs(db: AsyncIOMotorDatabase, issues: List[dict]) -> List[dict]:
+    """Strictly filter out any PRs that are closed, merged on GitHub, or merged in local jobs/issues."""
+    merged_jobs = await db.agent_jobs.find(
+        {"$or": [{"merged": True}, {"status": "Merged"}]},
+        {"pr_owner": 1, "pr_repo": 1, "pr_number": 1, "_id": 0}
+    ).to_list(100)
+    merged_pr_set = {
+        (j.get("pr_owner"), j.get("pr_repo"), j.get("pr_number"))
+        for j in merged_jobs if j.get("pr_number")
+    }
+    merged_issues = await db.issues.find(
+        {"$or": [{"status": "Merged"}, {"merged": True}]},
+        {"issue_id": 1, "_id": 0}
+    ).to_list(100)
+    merged_issue_ids = {i.get("issue_id") for i in merged_issues if i.get("issue_id")}
+
+    filtered_issues = []
+    for iss in issues:
+        if (
+            iss.get("github_state") != "open"
+            or iss.get("merged")
+            or iss.get("merged_at")
+            or iss.get("status") == "Merged"
+        ):
+            continue
+        pr_key = (iss.get("github_owner"), iss.get("github_repo"), iss.get("github_pr_number"))
+        if pr_key in merged_pr_set or iss.get("issue_id") in merged_issue_ids:
+            continue
+        filtered_issues.append(iss)
+
+    return filtered_issues
+
 
 
 async def _cached_or_fetch(
@@ -117,25 +175,22 @@ async def fetch_personal_prs(
         if effective_token:
             try:
                 repos = await github_api.fetch_user_repos(effective_token)
-                for repo in repos[:15]:
+                async def _process_repo(repo):
                     owner = repo.get("owner", {}).get("login")
                     repo_name = repo.get("name")
                     if not owner or not repo_name:
-                        continue
+                        return []
                     try:
                         prs = await github_api.fetch_repo_prs(
                             owner, repo_name, effective_token, filter_bot=False
                         )
-                        for pr in prs[:5]:
-                            try:
-                                issue = await github_api.convert_pr_to_issue(
-                                    pr, owner, repo_name, effective_token
-                                )
-                                all_issues.append(issue)
-                            except Exception:
-                                pass
+                        return await _convert_prs_parallel(prs, owner, repo_name, effective_token, limit=30)
                     except Exception:
-                        pass
+                        return []
+
+                batches = await asyncio.gather(*[_process_repo(r) for r in repos[:15]])
+                for batch in batches:
+                    all_issues.extend(batch)
             except Exception as e:
                 logger.warning("Error fetching repos with token for user %s: %s", username, e)
 
@@ -150,7 +205,7 @@ async def fetch_personal_prs(
             except Exception as e:
                 logger.warning("Error searching authored PRs for %s: %s", username, e)
 
-        return all_issues
+        return await _filter_out_merged_prs(db, all_issues)
 
     result = await _cached_or_fetch(
         db, cache_key, _fetch, ttl=PR_CACHE_TTL, force=force
@@ -180,22 +235,7 @@ async def fetch_org_prs(
                     prs = await github_api.fetch_repo_prs(
                         owner, repo_name, installation_token, filter_bot=False
                     )
-                    results = []
-                    for pr in prs[:5]:
-                        try:
-                            issue = await github_api.convert_pr_to_issue(
-                                pr, owner, repo_name, installation_token
-                            )
-                            results.append(issue)
-                        except Exception as exc:
-                            logger.warning(
-                                "Failed to convert PR #%s from %s/%s: %s",
-                                pr["number"],
-                                owner,
-                                repo_name,
-                                exc,
-                            )
-                    return results
+                    return await _convert_prs_parallel(prs, owner, repo_name, installation_token, limit=30)
                 except httpx.HTTPStatusError as exc:
                     logger.warning(
                         "Failed to fetch PRs from %s/%s: %s", owner, repo_name, exc
@@ -203,7 +243,8 @@ async def fetch_org_prs(
                     return []
 
             batches = await asyncio.gather(*[_fetch_repo(r) for r in repos])
-            return [issue for batch in batches for issue in batch]
+            app_issues = [issue for batch in batches for issue in batch]
+            return await _filter_out_merged_prs(db, app_issues)
 
         result = await _cached_or_fetch(
             db, "prs_org_app", _fetch_app, ttl=PR_CACHE_TTL, force=force
@@ -230,25 +271,22 @@ async def fetch_org_prs(
                     repos = await github_api.fetch_user_repos(effective_token)
                     # Filter for repos where owner is an organization or team member (not personal repo)
                     org_repos = [r for r in repos if username and r.get("owner", {}).get("login") != username]
-                    for repo in org_repos[:15]:
+                    async def _process_org_repo(repo):
                         owner = repo.get("owner", {}).get("login")
                         repo_name = repo.get("name")
                         if not owner or not repo_name:
-                            continue
+                            return []
                         try:
                             prs = await github_api.fetch_repo_prs(
                                 owner, repo_name, effective_token, filter_bot=False
                             )
-                            for pr in prs[:5]:
-                                try:
-                                    issue = await github_api.convert_pr_to_issue(
-                                        pr, owner, repo_name, effective_token
-                                    )
-                                    org_issues.append(issue)
-                                except Exception:
-                                    pass
+                            return await _convert_prs_parallel(prs, owner, repo_name, effective_token, limit=30)
                         except Exception:
-                            pass
+                            return []
+
+                    batches = await asyncio.gather(*[_process_org_repo(r) for r in org_repos[:15]])
+                    for batch in batches:
+                        org_issues.extend(batch)
                 except Exception as e:
                     logger.warning("Error fetching org repos for user %s: %s", username, e)
 
@@ -263,7 +301,7 @@ async def fetch_org_prs(
                 except Exception as e:
                     logger.warning("Error fetching review requested PRs for %s: %s", username, e)
 
-            return org_issues
+            return await _filter_out_merged_prs(db, org_issues)
 
         result = await _cached_or_fetch(
             db, cache_key, _fetch_user_org, ttl=PR_CACHE_TTL, force=force
@@ -491,17 +529,42 @@ async def merge_pr(
     payload = {"commit_message": commit_message, "merge_method": merge_method}
     if commit_title:
         payload["commit_title"] = commit_title
+
+    headers = _github_headers(token)
+    merge_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.put(
-            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge",
-            headers=_github_headers(token),
-            json=payload,
-        )
+        resp = await client.put(merge_url, headers=headers, json=payload)
+        
+        # If the repository disallows this specific merge method, try sensible fallbacks
+        if resp.status_code == 405 and "not allowed" in resp.text.lower():
+            for fallback_method in ["squash", "merge", "rebase"]:
+                if fallback_method != merge_method:
+                    fallback_payload = dict(payload, merge_method=fallback_method)
+                    fb_resp = await client.put(merge_url, headers=headers, json=fallback_payload)
+                    if fb_resp.is_success:
+                        resp = fb_resp
+                        break
+
         resp.raise_for_status()
         data = resp.json()
+
+    sha = data.get("sha", "")
+    merged = data.get("merged", True)
+
+    if db is not None:
+        try:
+            await db.issues.update_one(
+                {"issue_id": issue_id},
+                {"$set": {"status": "Merged", "merged": True, "github_state": "closed", "merge_commit_sha": sha}},
+            )
+            await issue_repo.invalidate_all_pr_caches(db)
+        except Exception as e:
+            logger.warning("Failed to update issue status in DB for %s: %s", issue_id, e)
+
     return {
         "success": True,
-        "message": "PR merged successfully",
-        "sha": data.get("sha"),
-        "merged": data.get("merged", True),
+        "message": "PR merged successfully on GitHub",
+        "sha": sha,
+        "merged": merged,
     }

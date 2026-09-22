@@ -329,3 +329,31 @@ class TestPRActions:
         with pytest.raises(ValueError):
             await _resolve_pr_info("invalid_format_pr")
 
+    @pytest.mark.anyio
+    async def test_filter_out_merged_prs(self):
+        """Verify _filter_out_merged_prs excludes closed, merged, and local-merged PRs."""
+        from app.services.pr_service import _filter_out_merged_prs
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_db = MagicMock()
+        mock_db.agent_jobs.find.return_value.to_list = AsyncMock(return_value=[
+            {"pr_owner": "ownerA", "pr_repo": "repoA", "pr_number": 10}
+        ])
+        mock_db.issues.find.return_value.to_list = AsyncMock(return_value=[
+            {"issue_id": "gh_pr_ownerB_repoB_20"}
+        ])
+
+        sample_issues = [
+            {"issue_id": "gh_pr_ownerA_repoA_10", "github_owner": "ownerA", "github_repo": "repoA", "github_pr_number": 10, "github_state": "open"},
+            {"issue_id": "gh_pr_ownerB_repoB_20", "github_owner": "ownerB", "github_repo": "repoB", "github_pr_number": 20, "github_state": "open"},
+            {"issue_id": "gh_pr_ownerC_repoC_30", "github_owner": "ownerC", "github_repo": "repoC", "github_pr_number": 30, "github_state": "closed"},
+            {"issue_id": "gh_pr_ownerD_repoD_40", "github_owner": "ownerD", "github_repo": "repoD", "github_pr_number": 40, "github_state": "open", "merged": True},
+            {"issue_id": "gh_pr_ownerE_repoE_50", "github_owner": "ownerE", "github_repo": "repoE", "github_pr_number": 50, "github_state": "open", "status": "Merged"},
+            {"issue_id": "gh_pr_ownerF_repoF_60", "github_owner": "ownerF", "github_repo": "repoF", "github_pr_number": 60, "github_state": "open"},
+        ]
+
+        filtered = await _filter_out_merged_prs(mock_db, sample_issues)
+        assert len(filtered) == 1
+        assert filtered[0]["issue_id"] == "gh_pr_ownerF_repoF_60"
+
+

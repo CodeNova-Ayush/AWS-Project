@@ -49,6 +49,10 @@ export interface CodeIssue {
   ci_total_count?: number;
   ci_failure_log?: string;
   base_branch?: string;
+  github_mergeable?: boolean | null;
+  github_mergeable_state?: string;
+  has_conflicts?: boolean;
+  github_draft?: boolean;
 }
 
 export interface ChatMessage {

@@ -64,15 +64,25 @@ export default function PWAInstallBanner() {
     setIsAndroid(isAndroidDevice);
     setSelectedTab(isIosDevice ? 'ios' : 'android');
 
+    // Global custom event to open guided install modal from anywhere in the app (e.g. Profile)
+    const handleOpenModal = () => {
+      setShowModal(true);
+    };
+    window.addEventListener('open-pwa-install-modal', handleOpenModal);
+
     // On mobile devices, reveal the install banner after a short delay
+    let timer: any = null;
+    let handleBeforeInstallPrompt: ((e: Event) => void) | null = null;
+    let handleAppInstalled: (() => void) | null = null;
+
     if (isMobile) {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setVisible(true);
         animateIn();
       }, 2000);
 
       // Listen for Chromium / Android beforeinstallprompt
-      const handleBeforeInstallPrompt = (e: Event) => {
+      handleBeforeInstallPrompt = (e: Event) => {
         e.preventDefault();
         setDeferredPrompt(e as BeforeInstallPromptEvent);
         setVisible(true);
@@ -82,19 +92,20 @@ export default function PWAInstallBanner() {
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
       // If app installed, hide banner
-      const handleAppInstalled = () => {
+      handleAppInstalled = () => {
         setVisible(false);
         setDeferredPrompt(null);
       };
 
       window.addEventListener('appinstalled', handleAppInstalled);
-
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        window.removeEventListener('appinstalled', handleAppInstalled);
-      };
     }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (handleBeforeInstallPrompt) window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      if (handleAppInstalled) window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('open-pwa-install-modal', handleOpenModal);
+    };
   }, []);
 
   const animateIn = () => {
@@ -155,19 +166,20 @@ export default function PWAInstallBanner() {
     setShowModal(true);
   };
 
-  if (!visible) return null;
+  if (!visible && !showModal) return null;
 
   return (
     <>
-      <Animated.View
-        style={[
-          styles.container,
-          {
-            transform: [{ translateY: slideAnim }],
-            opacity: opacityAnim,
-          },
-        ]}
-      >
+      {visible && (
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              transform: [{ translateY: slideAnim }],
+              opacity: opacityAnim,
+            },
+          ]}
+        >
         <View style={styles.card}>
           <Image
             source={appIconSource}
@@ -199,6 +211,7 @@ export default function PWAInstallBanner() {
           </Pressable>
         </View>
       </Animated.View>
+      )}
 
       {/* Universal Instructions Modal */}
       {showModal && (

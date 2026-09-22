@@ -4,7 +4,7 @@ import {
   useWindowDimensions, Alert, Share, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../src/constants/theme';
@@ -13,7 +13,7 @@ import {
   fetchIssues, fetchMe, saveIssue, unsaveIssue, fetchSavedIds,
   applyIssue, logout, fetchMixedIssues, fetchPersonalPRs, fetchOrgPRs,
   fetchOrgIssues, fetchPersonalIssues,
-  approvePR, rejectPR, mergePR, mergeAllPRs,
+  approvePR, rejectPR, mergePR, mergeAllPRs, assignAgent,
 } from '../../src/services/api';
 import CodeIssueCard from '../../src/components/CodeIssueCard';
 import ActionSidebar from '../../src/components/ActionSidebar';
@@ -83,6 +83,20 @@ export default function FeedScreen() {
     }
   }, [activeTab, filterType]);
 
+  // When FeedScreen gains focus (e.g. returning from /session/[id], profile, or bookmarks), refresh the feed
+  const isFirstMount = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstMount.current) {
+        isFirstMount.current = false;
+        return;
+      }
+      if (user) {
+        loadIssuesForTab(activeTab, filterType, true);
+      }
+    }, [activeTab, filterType, user])
+  );
+
   async function loadIssuesForTab(tab: 'org' | 'repos', type: 'prs' | 'issues', force = false) {
     try {
       setLoading(true);
@@ -93,7 +107,12 @@ export default function FeedScreen() {
       } else {
         issuesData = type === 'prs' ? await fetchPersonalPRs(force) : await fetchPersonalIssues(force);
       }
-      setIssues(issuesData);
+      const activeIssues = (issuesData || []).filter(i =>
+        i.github_state !== 'closed' &&
+        (i as any).status !== 'Merged' &&
+        (i as any).merged !== true
+      );
+      setIssues(activeIssues);
       setCurrentIndex(0);
       if (flatListRef.current) {
         flatListRef.current.scrollToOffset({ offset: 0, animated: false });
@@ -120,7 +139,12 @@ export default function FeedScreen() {
         issuesData = await fetchIssues();
       }
 
-      setIssues(issuesData);
+      const activeIssues = (issuesData || []).filter(i =>
+        i.github_state !== 'closed' &&
+        (i as any).status !== 'Merged' &&
+        (i as any).merged !== true
+      );
+      setIssues(activeIssues);
     } catch {
       // fallback
     } finally {
@@ -296,6 +320,40 @@ export default function FeedScreen() {
       const msg = err?.message || 'Failed to merge PR on GitHub';
       showToast(msg, 'error');
       throw err;
+    }
+  }
+
+  async function handleFixWithAgentFromModal(autoMerge = true) {
+    const target = selectedPRIssue || currentIssue;
+    if (!target) return;
+
+    let repoName = target.project || 'owner/repo';
+    if (target.github_owner && target.github_repo) {
+      repoName = `${target.github_owner}/${target.github_repo}`;
+    } else if (target.project && target.project.includes('/')) {
+      repoName = target.project;
+    } else if (target.issue_id.startsWith('gh_pr_')) {
+      const parts = target.issue_id.replace('gh_pr_', '').split('_');
+      if (parts.length >= 3) {
+        const owner = parts[0];
+        const rName = parts.slice(1, -1).join('_');
+        repoName = `${owner}/${rName}`;
+      }
+    }
+
+    try {
+      showToast('Assigning AI Agent to fix PR and resolve conflicts...', 'info');
+      const res = await assignAgent(target.issue_id, 'opencode', repoName, autoMerge);
+      if (autoMerge) {
+        removePR(target.issue_id);
+      }
+      showToast('Agent assigned! Redirecting to live workspace session...', 'success');
+      router.push(`/session/${res.job_id}`);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to assign AI Agent';
+      showToast(msg, 'error');
+      // If error (e.g. key required), open assign agent modal so user can configure key
+      setAssignAgentVisible(true);
     }
   }
 
@@ -537,13 +595,17 @@ export default function FeedScreen() {
       )}
 
       {/* Assign Agent Modal */}
-      {currentIssue && (
+      {(selectedPRIssue || currentIssue) && (
         <AssignAgentModal
-          issueId={currentIssue.issue_id}
+          issueId={(selectedPRIssue || currentIssue)!.issue_id}
           repoName={
-            currentIssue.github_owner && currentIssue.github_repo
-              ? `${currentIssue.github_owner}/${currentIssue.github_repo}`
-              : currentIssue.project || 'owner/repo'
+            (selectedPRIssue || currentIssue)!.github_owner && (selectedPRIssue || currentIssue)!.github_repo
+              ? `${(selectedPRIssue || currentIssue)!.github_owner}/${(selectedPRIssue || currentIssue)!.github_repo}`
+              : (selectedPRIssue || currentIssue)!.project?.includes('/')
+              ? (selectedPRIssue || currentIssue)!.project
+              : (selectedPRIssue || currentIssue)!.issue_id.startsWith('gh_pr_')
+              ? `${(selectedPRIssue || currentIssue)!.issue_id.replace('gh_pr_', '').split('_')[0]}/${(selectedPRIssue || currentIssue)!.issue_id.replace('gh_pr_', '').split('_').slice(1, -1).join('_')}`
+              : (selectedPRIssue || currentIssue)!.project || 'owner/repo'
           }
           visible={assignAgentVisible}
           onClose={() => setAssignAgentVisible(false)}
@@ -569,6 +631,13 @@ export default function FeedScreen() {
           prTitle={(selectedPRIssue || currentIssue)!.title}
           prNumber={(selectedPRIssue || currentIssue)!.github_pr_number || 2}
           baseBranch={(selectedPRIssue || currentIssue)!.base_branch || 'main'}
+          hasConflicts={Boolean(
+            (selectedPRIssue || currentIssue)!.has_conflicts ||
+            (selectedPRIssue || currentIssue)!.github_mergeable === false ||
+            (selectedPRIssue || currentIssue)!.github_mergeable_state === 'dirty'
+          )}
+          mergeable={(selectedPRIssue || currentIssue)!.github_mergeable}
+          mergeableState={(selectedPRIssue || currentIssue)!.github_mergeable_state}
           onClose={() => {
             setPrModalVisible(false);
             setSelectedPRIssue(null);
@@ -576,6 +645,7 @@ export default function FeedScreen() {
           onApprove={executePRApprove}
           onReject={executePRReject}
           onMerge={executePRMerge}
+          onFixWithAgent={handleFixWithAgentFromModal}
           onSuccess={() => {
             handleForceReload();
           }}

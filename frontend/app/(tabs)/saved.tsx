@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import { CodeIssue } from '../../src/constants/types';
@@ -37,6 +37,12 @@ export default function BookmarksTabScreen() {
   useEffect(() => {
     loadSaved();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSaved();
+    }, [])
+  );
 
   const loadSaved = useCallback(async () => {
     try {

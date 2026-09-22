@@ -85,7 +85,10 @@ async def set_cache(
 
 async def invalidate_cache(db: AsyncIOMotorDatabase, key: str) -> None:
     """Mark a cache entry as stale so the next read triggers a fresh fetch."""
-    await db.github_cache.update_one(
-        {"key": key},
-        {"$set": {"fetched_at": datetime(1970, 1, 1, tzinfo=timezone.utc)}},
-    )
+    await db.github_cache.delete_one({"key": key})
+
+
+async def invalidate_all_pr_caches(db: AsyncIOMotorDatabase) -> None:
+    """Delete all PR and issue cache entries so all users get fresh GitHub data."""
+    await db.github_cache.delete_many({"key": {"$regex": "^(prs_|issues_)"}})
+

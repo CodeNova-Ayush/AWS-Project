@@ -32,11 +32,15 @@ interface PRActionModalProps {
   prTitle: string;
   prNumber?: number;
   baseBranch?: string;
+  hasConflicts?: boolean;
+  mergeable?: boolean | null;
+  mergeableState?: string;
   onClose: () => void;
   onApprove?: () => Promise<void>;
   onReject?: (comment: string) => Promise<void>;
   onMerge?: (method: MergeMethod, commitTitle: string) => Promise<void>;
   onSuccess?: () => void;
+  onFixWithAgent?: (autoMerge?: boolean) => void;
 }
 
 const MERGE_METHODS: { value: MergeMethod; label: string; desc: string }[] = [
@@ -57,11 +61,15 @@ export default function PRActionModal({
   prTitle,
   prNumber = 2,
   baseBranch = 'main',
+  hasConflicts = false,
+  mergeable = null,
+  mergeableState = 'unknown',
   onClose,
   onApprove,
   onReject,
   onMerge,
   onSuccess,
+  onFixWithAgent,
 }: PRActionModalProps) {
   const [loading, setLoading] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
@@ -69,6 +77,7 @@ export default function PRActionModal({
   const [commitTitle, setCommitTitle] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
 
+  const isConflicted = Boolean(hasConflicts || mergeable === false || mergeableState === 'dirty');
   const slideAnim = useRef(new Animated.Value(400)).current;
 
   const cfg = MODE_CONFIG[mode];
@@ -78,7 +87,7 @@ export default function PRActionModal({
       // Reset state when opening
       setLoading(false);
       setRejectComment('');
-      setMergeMethod('merge');
+      setMergeMethod('squash');
       setCommitTitle('');
       setErrorText(null);
 
@@ -95,6 +104,11 @@ export default function PRActionModal({
   }, [visible]);
 
   async function handleCTA() {
+    if (mode === 'merge' && isConflicted && onFixWithAgent) {
+      onClose();
+      onFixWithAgent(true);
+      return;
+    }
     setLoading(true);
     setErrorText(null);
     try {
@@ -178,6 +192,32 @@ export default function PRActionModal({
             {/* Merge mode — Safety Gate + method picker + commit title */}
             {mode === 'merge' && (
               <View style={styles.section}>
+                {/* Conflict Warning Box */}
+                {isConflicted && (
+                  <View style={styles.conflictBox}>
+                    <View style={styles.conflictHeader}>
+                      <Feather name="alert-triangle" size={18} color="#EF4444" />
+                      <Text style={styles.conflictTitle}>Merge Conflict Detected</Text>
+                    </View>
+                    <Text style={styles.conflictDesc}>
+                      PR #{prNumber} has merge conflicts with '{baseBranch}'. It cannot be merged directly by GitHub without resolving conflicts.
+                    </Text>
+                    {onFixWithAgent && (
+                      <Pressable
+                        style={styles.agentActionBtn}
+                        onPress={() => {
+                          onClose();
+                          onFixWithAgent(true);
+                        }}
+                      >
+                        <Feather name="cpu" size={15} color="#FFFFFF" />
+                        <Text style={styles.agentActionBtnText}>Fix with AI Agent & Auto-Merge</Text>
+                        <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+
                 {/* Safety Confirmation Box */}
                 <View style={styles.safetyGateBox}>
                   <View style={styles.safetyGateHeader}>
@@ -235,13 +275,32 @@ export default function PRActionModal({
           <View style={{ gap: 10, marginTop: SPACING.md }}>
             {errorText && (
               <View style={styles.errorContainer}>
-                <Feather name="alert-circle" size={16} color="#E11D48" style={{ marginTop: 2 }} />
-                <Text style={styles.errorTextBanner}>{errorText}</Text>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                  <Feather name="alert-circle" size={16} color="#E11D48" style={{ marginTop: 2 }} />
+                  <Text style={styles.errorTextBanner}>{errorText}</Text>
+                </View>
+                {onFixWithAgent && (
+                  <Pressable
+                    style={styles.errorAgentBtn}
+                    onPress={() => {
+                      onClose();
+                      onFixWithAgent(true);
+                    }}
+                  >
+                    <Feather name="cpu" size={14} color="#7C3AED" />
+                    <Text style={styles.errorAgentBtnText}>Fix with AI Agent & Auto-Merge</Text>
+                    <Feather name="arrow-right" size={14} color="#7C3AED" />
+                  </Pressable>
+                )}
               </View>
             )}
 
             <Pressable
-              style={[styles.cta, { backgroundColor: cfg.color }, loading && styles.ctaDisabled]}
+              style={[
+                styles.cta,
+                { backgroundColor: mode === 'merge' && isConflicted ? '#7C3AED' : cfg.color },
+                loading && styles.ctaDisabled,
+              ]}
               onPress={handleCTA}
               disabled={loading}
             >
@@ -249,9 +308,13 @@ export default function PRActionModal({
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Feather name={cfg.icon} size={16} color="#FFFFFF" />
+                  <Feather name={mode === 'merge' && isConflicted ? 'cpu' : cfg.icon} size={16} color="#FFFFFF" />
                   <Text style={styles.ctaText}>
-                    {mode === 'merge' ? `Confirm & Merge PR #${prNumber}` : cfg.ctaLabel}
+                    {mode === 'merge'
+                      ? isConflicted
+                        ? 'Fix Conflicts & Merge with AI Agent'
+                        : `Confirm & Merge PR #${prNumber}`
+                      : cfg.ctaLabel}
                   </Text>
                 </>
               )}
@@ -479,14 +542,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: 'rgba(225, 29, 72, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(225, 29, 72, 0.25)',
     borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    gap: 8,
+    padding: SPACING.md,
     marginBottom: 4,
   },
   errorTextBanner: {
@@ -495,5 +555,66 @@ const styles = StyleSheet.create({
     color: '#E11D48',
     fontWeight: '500',
     lineHeight: 18,
+  },
+  conflictBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.07)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  conflictHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  conflictTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    color: '#EF4444',
+    letterSpacing: 0.8,
+  },
+  conflictDesc: {
+    fontSize: FONT_SIZES.xs + 1,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  agentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#7C3AED',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    ...SHADOWS.sm,
+  },
+  agentActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+  },
+  errorAgentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  errorAgentBtnText: {
+    color: '#7C3AED',
+    fontSize: FONT_SIZES.xs + 1,
+    fontWeight: '700',
   },
 });

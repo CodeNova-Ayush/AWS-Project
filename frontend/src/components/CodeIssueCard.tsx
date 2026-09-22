@@ -233,6 +233,26 @@ export default function CodeIssueCard({
                   <View style={styles.diffScopePill}>
                     <Text style={styles.diffScopeText}>{diffMetrics.summaryText}</Text>
                   </View>
+
+                  {Boolean(issue.has_conflicts || issue.github_mergeable === false || issue.github_mergeable_state === 'dirty') && (
+                    <>
+                      <Text style={styles.metaBullet}>•</Text>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(225, 29, 72, 0.12)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(225, 29, 72, 0.3)',
+                        borderRadius: 20,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        gap: 4,
+                      }}>
+                        <Feather name="alert-triangle" size={11} color="#E11D48" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#E11D48' }}>Conflict</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* 2. Repository Identifier */}

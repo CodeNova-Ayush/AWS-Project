@@ -95,10 +95,10 @@ async def fetch_user_prs_by_username(username: str, token: str = "") -> List[Dic
         except Exception:
             return []
 
-    for item in items[:15]:
+    async def _fetch_item(item):
         pr_api_url = item.get("pull_request", {}).get("url")
         if not pr_api_url:
-            continue
+            return None
         try:
             repo_url = item.get("repository_url", "")
             parts = repo_url.split("/")
@@ -106,13 +106,16 @@ async def fetch_user_prs_by_username(username: str, token: str = "") -> List[Dic
             async with httpx.AsyncClient(timeout=10.0) as client:
                 pr_resp = await client.get(pr_api_url, headers=headers)
                 if pr_resp.status_code != 200:
-                    continue
+                    return None
                 pr_data = pr_resp.json()
-            issue = await convert_pr_to_issue(pr_data, owner, repo_name, token)
-            results.append(issue)
+            if pr_data.get("state") != "open" or pr_data.get("merged_at") or pr_data.get("merged"):
+                return None
+            return await convert_pr_to_issue(pr_data, owner, repo_name, token)
         except Exception:
-            continue
-    return results
+            return None
+
+    results = await asyncio.gather(*[_fetch_item(it) for it in items[:15]])
+    return [r for r in results if r is not None]
 
 
 async def fetch_user_review_requested_prs(username: str, token: str = "") -> List[Dict]:
@@ -139,10 +142,10 @@ async def fetch_user_review_requested_prs(username: str, token: str = "") -> Lis
         except Exception:
             return []
 
-    for item in items[:15]:
+    async def _fetch_review_item(item):
         pr_api_url = item.get("pull_request", {}).get("url")
         if not pr_api_url:
-            continue
+            return None
         try:
             repo_url = item.get("repository_url", "")
             parts = repo_url.split("/")
@@ -150,13 +153,16 @@ async def fetch_user_review_requested_prs(username: str, token: str = "") -> Lis
             async with httpx.AsyncClient(timeout=10.0) as client:
                 pr_resp = await client.get(pr_api_url, headers=headers)
                 if pr_resp.status_code != 200:
-                    continue
+                    return None
                 pr_data = pr_resp.json()
-            issue = await convert_pr_to_issue(pr_data, owner, repo_name, token)
-            results.append(issue)
+            if pr_data.get("state") != "open" or pr_data.get("merged_at") or pr_data.get("merged"):
+                return None
+            return await convert_pr_to_issue(pr_data, owner, repo_name, token)
         except Exception:
-            continue
-    return results
+            return None
+
+    results = await asyncio.gather(*[_fetch_review_item(it) for it in items[:15]])
+    return [r for r in results if r is not None]
 
 
 async def fetch_repo_issues(
@@ -448,6 +454,8 @@ async def convert_pr_to_issue(pr: Dict, owner: str, repo: str, token: str) -> Di
         "github_repo": repo,
         "github_pr_url": pr.get("html_url", ""),
         "github_state": pr.get("state", "open"),
+        "merged": pr.get("merged", False) or bool(pr.get("merged_at")),
+        "merged_at": pr.get("merged_at"),
         "github_user": author_name,
         "author_name": author_name,
         "author_avatar": author_avatar,
@@ -463,6 +471,8 @@ async def convert_pr_to_issue(pr: Dict, owner: str, repo: str, token: str) -> Di
         "ai_risk": ai_risk,
         "ai_summary_bullets": ai_bullets,
         "github_mergeable": pr.get("mergeable"),
+        "github_mergeable_state": pr.get("mergeable_state", "unknown"),
+        "has_conflicts": pr.get("mergeable") is False or pr.get("mergeable_state") == "dirty",
         "github_draft": pr.get("draft", False),
     }
 
