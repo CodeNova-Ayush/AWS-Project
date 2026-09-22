@@ -9,12 +9,15 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  Modal,
+  TextInput,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
-import { fetchMe, getApiBase, demoLogin } from '../src/services/api';
+import { fetchMe, getApiBase, demoLogin, connectGitHubToken } from '../src/services/api';
 import { COLORS, SPACING, BORDER_RADIUS } from '../src/constants/theme';
 import MatrixRain from '../src/components/MatrixRain';
 
@@ -24,6 +27,13 @@ export default function LoginScreen() {
   const router  = useRouter();
   const [checking, setChecking] = useState(true);
   const [pressing, setPressing] = useState(false);
+
+  // PAT connection modal state
+  const [patModalVisible, setPatModalVisible] = useState(false);
+  const [patToken, setPatToken] = useState('');
+  const [patLoading, setPatLoading] = useState(false);
+  const [patError, setPatError] = useState('');
+  const [oauthNotice, setOauthNotice] = useState<string | null>(null);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(28)).current;
@@ -90,6 +100,25 @@ export default function LoginScreen() {
     }
   }
 
+  async function handleConnectPAT() {
+    const trimmed = patToken.trim();
+    if (!trimmed) {
+      setPatError('Please paste your GitHub Personal Access Token.');
+      return;
+    }
+    setPatLoading(true);
+    setPatError('');
+    try {
+      await connectGitHubToken(trimmed);
+      setPatModalVisible(false);
+      router.replace('/feed');
+    } catch (err: any) {
+      setPatError(err?.message || 'Failed to authenticate token. Ensure token has repo scope.');
+    } finally {
+      setPatLoading(false);
+    }
+  }
+
   async function handleGitHubLogin() {
     try {
       setPressing(true);
@@ -98,7 +127,9 @@ export default function LoginScreen() {
         `${API_BASE}/api/auth/github/login${Platform.OS !== 'web' ? '?platform=mobile' : ''}`
       );
       if (!res.ok) {
-        await handleDemoLogin();
+        const errJson = await res.json().catch(() => ({}));
+        setOauthNotice(errJson.detail || 'GitHub OAuth is not configured on this server. Connect directly with a Personal Access Token (PAT) below.');
+        setPatModalVisible(true);
         return;
       }
       const data = await res.json();
@@ -118,11 +149,13 @@ export default function LoginScreen() {
           }
         }
       } else {
-        await handleDemoLogin();
+        setOauthNotice('GitHub OAuth is not configured on this server. Connect directly with a Personal Access Token (PAT) below.');
+        setPatModalVisible(true);
       }
     } catch (error) {
-      console.error('❌ GitHub login error, using demo login fallback:', error);
-      await handleDemoLogin();
+      console.error('❌ GitHub login error:', error);
+      setOauthNotice('Unable to reach GitHub OAuth. Connect directly using a Personal Access Token (PAT) below.');
+      setPatModalVisible(true);
     } finally {
       setPressing(false);
     }
@@ -220,6 +253,23 @@ export default function LoginScreen() {
               <Feather name="arrow-right" size={16} color="rgba(0,0,0,0.45)" />
             </Pressable>
 
+            {/* Direct PAT connection */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.patBtn,
+                pressed && styles.patBtnPressed,
+              ]}
+              onPress={() => {
+                setOauthNotice(null);
+                setPatError('');
+                setPatModalVisible(true);
+              }}
+              testID="github-pat-btn"
+            >
+              <Feather name="key" size={15} color={COLORS.primary} />
+              <Text style={styles.patBtnText}>Connect with GitHub Token (PAT)</Text>
+            </Pressable>
+
             {/* #5 — Keyboard hint, web only */}
             {Platform.OS === 'web' && (
               <View style={styles.kbHintRow}>
@@ -232,10 +282,10 @@ export default function LoginScreen() {
 
             <Pressable
               style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.6 }]}
-              onPress={() => router.replace('/feed')}
+              onPress={handleDemoLogin}
               testID="skip-login-btn"
             >
-              <Text style={styles.skipText}>Browse without an account</Text>
+              <Text style={styles.skipText}>Explore Demo Mode (Mock PRs)</Text>
             </Pressable>
           </View>
 
@@ -255,6 +305,113 @@ export default function LoginScreen() {
           API keys encrypted at rest · your code never leaves your device unencrypted · only PR metadata stored
         </Text>
       </Animated.View>
+
+      {/* GitHub Personal Access Token (PAT) Modal */}
+      <Modal
+        visible={patModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPatModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={styles.modalIconWrap}>
+                  <Feather name="github" size={20} color={COLORS.primary} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Connect GitHub Account</Text>
+                  <Text style={styles.modalSubtitle}>Sync real repos & enable AI auto-merge</Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setPatModalVisible(false)}
+                hitSlop={10}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={18} color={COLORS.textTertiary} />
+              </Pressable>
+            </View>
+
+            {oauthNotice ? (
+              <View style={styles.noticeBanner}>
+                <Feather name="info" size={14} color="#F59E0B" />
+                <Text style={styles.noticeBannerText}>{oauthNotice}</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.modalDescription}>
+              Enter a GitHub Personal Access Token (classic or fine-grained) with <Text style={styles.boldText}>repo</Text> scope to load your pull requests, review changes, and let the AI Agent commit fixes.
+            </Text>
+
+            <Pressable
+              style={styles.tokenHelpLink}
+              onPress={() => {
+                const url = 'https://github.com/settings/tokens/new?scopes=repo,read:user,user:email&description=MergeDeck';
+                if (Platform.OS === 'web') {
+                  window.open(url, '_blank');
+                } else {
+                  Linking.openURL(url);
+                }
+              }}
+            >
+              <Text style={styles.tokenHelpLinkText}>Generate new token on GitHub (repo scope) ↗</Text>
+            </Pressable>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Personal Access Token</Text>
+              <TextInput
+                style={styles.tokenInput}
+                value={patToken}
+                onChangeText={(text) => {
+                  setPatToken(text);
+                  if (patError) setPatError('');
+                }}
+                placeholder="ghp_... or github_pat_..."
+                placeholderTextColor={COLORS.textTertiary}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {patError ? (
+              <View style={styles.errorBanner}>
+                <Feather name="alert-circle" size={14} color={COLORS.error} />
+                <Text style={styles.errorBannerText}>{patError}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalSubmitBtn, patLoading && { opacity: 0.7 }]}
+                onPress={handleConnectPAT}
+                disabled={patLoading}
+              >
+                {patLoading ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <>
+                    <Feather name="check" size={16} color="#000000" />
+                    <Text style={styles.modalSubmitBtnText}>Authenticate & Sync PRs</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={styles.modalDemoBtn}
+                onPress={() => {
+                  setPatModalVisible(false);
+                  handleDemoLogin();
+                }}
+              >
+                <Text style={styles.modalDemoBtnText}>Continue in Demo Mode (Mock PRs)</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -726,5 +883,171 @@ const styles = StyleSheet.create({
     flex: 1,
     opacity: 0.7,
     letterSpacing: 0.1,
+  },
+
+  patBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(208, 253, 62, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(208, 253, 62, 0.3)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.lg,
+  },
+  patBtnPressed: {
+    backgroundColor: 'rgba(208, 253, 62, 0.16)',
+  },
+  patBtnText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 460,
+    backgroundColor: '#161B22',
+    borderWidth: 1,
+    borderColor: '#30363D',
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.xl,
+    gap: SPACING.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(208, 253, 62, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+  },
+  noticeBannerText: {
+    flex: 1,
+    color: '#F59E0B',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  modalDescription: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  boldText: {
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+  },
+  tokenHelpLink: {
+    alignSelf: 'flex-start',
+  },
+  tokenHelpLinkText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  inputContainer: {
+    gap: 6,
+  },
+  inputLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tokenInput: {
+    backgroundColor: '#0D1117',
+    borderWidth: 1,
+    borderColor: '#30363D',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontFamily: MONO,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: COLORS.error,
+    fontSize: 12,
+  },
+  modalActions: {
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  modalSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+  },
+  modalSubmitBtnText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalDemoBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalDemoBtnText: {
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    textDecorationLine: 'underline',
   },
 });

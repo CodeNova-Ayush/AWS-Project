@@ -187,7 +187,7 @@ export default function FeedScreen() {
       showToast('Removed from saved', 'info');
     } else {
       setSavedIds(prev => new Set(prev).add(id));
-      await saveIssue(id).catch(() => {});
+      await saveIssue(id, currentIssue).catch(() => {});
       showToast('Saved to your list!', 'success');
     }
   }

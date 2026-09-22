@@ -29,6 +29,7 @@ import {
   setActiveProvider,
   deleteProviderKey,
   UserKeysStatus,
+  connectGitHubToken,
 } from '../../src/services/api';
 import { User } from '../../src/constants/types';
 
@@ -145,6 +146,12 @@ export default function ProfileScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [providerToDelete, setProviderToDelete] = useState<string | null>(null);
   const [isDeletingKey, setIsDeletingKey] = useState(false);
+
+  // GitHub Personal Access Token connection state
+  const [githubModalVisible, setGithubModalVisible] = useState(false);
+  const [githubTokenInput, setGithubTokenInput] = useState('');
+  const [connectingGithub, setConnectingGithub] = useState(false);
+  const [githubError, setGithubError] = useState('');
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState('');
@@ -304,6 +311,27 @@ export default function ProfileScreen() {
     router.replace('/');
   }
 
+  async function handleConnectGitHubPAT() {
+    const trimmed = githubTokenInput.trim();
+    if (!trimmed) {
+      setGithubError('Please enter your GitHub Personal Access Token');
+      return;
+    }
+    setConnectingGithub(true);
+    setGithubError('');
+    try {
+      const updatedUser = await connectGitHubToken(trimmed);
+      setUser(updatedUser);
+      setGithubTokenInput('');
+      setGithubModalVisible(false);
+      showToast(`Connected as @${updatedUser.github_username}! Real PRs synced.`, 'success');
+    } catch (err: any) {
+      setGithubError(err?.message || 'Failed to authenticate token with GitHub');
+    } finally {
+      setConnectingGithub(false);
+    }
+  }
+
   const currentPreset = PROVIDER_PRESETS.find((p) => p.id === selectedProviderId) || PROVIDER_PRESETS[0];
   const isSelectedConfigured = !!keyStatus.providers?.[selectedProviderId]?.configured;
   const isSelectedActive = isSelectedConfigured && keyStatus.active_provider === selectedProviderId;
@@ -359,7 +387,7 @@ export default function ProfileScreen() {
                     </Text>
                   ) : null}
                   <View style={styles.profileBadgeRow}>
-                    {user.github_username ? (
+                    {user.github_username && user.user_id !== 'user_demo_local' ? (
                       <Pressable
                         style={styles.githubChip}
                         onPress={() => WebBrowser.openBrowserAsync(`https://github.com/${user.github_username}`)}
@@ -369,10 +397,17 @@ export default function ProfileScreen() {
                         <Feather name="external-link" size={10} color={COLORS.textTertiary} />
                       </Pressable>
                     ) : null}
-                    <View style={styles.verifiedBadge}>
-                      <Feather name="check-circle" size={10} color="#10B981" />
-                      <Text style={styles.verifiedText}>OAuth Connected</Text>
-                    </View>
+                    {user.user_id === 'user_demo_local' ? (
+                      <View style={styles.demoBadge}>
+                        <Feather name="alert-triangle" size={10} color="#F59E0B" />
+                        <Text style={styles.demoBadgeText}>Demo Account</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.verifiedBadge}>
+                        <Feather name="check-circle" size={10} color="#10B981" />
+                        <Text style={styles.verifiedText}>GitHub Connected</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <Pressable style={styles.logoutBtn} onPress={handleLogout} accessibilityLabel="Sign Out">
@@ -380,6 +415,52 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/* ── Demo Mode Notice / GitHub Connect Card ── */}
+            {user.user_id === 'user_demo_local' ? (
+              <View style={styles.demoAlertCard}>
+                <View style={styles.demoAlertTop}>
+                  <View style={styles.demoAlertIcon}>
+                    <Feather name="alert-triangle" size={16} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.demoAlertTitle}>Demo Mode Active (Mock PRs)</Text>
+                    <Text style={styles.demoAlertText}>
+                      You are currently viewing simulated pull requests. Connect your real GitHub account via a Personal Access Token (PAT) to load your repositories, review live code, and enable AI background agents to fix & merge PRs.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.connectGithubCardBtn}
+                  onPress={() => {
+                    setGithubError('');
+                    setGithubModalVisible(true);
+                  }}
+                  testID="connect-github-btn"
+                >
+                  <Feather name="github" size={14} color="#000000" />
+                  <Text style={styles.connectGithubCardBtnText}>Connect GitHub Token / PAT</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.githubConnectedBar}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Feather name="github" size={16} color={COLORS.primary} />
+                  <Text style={styles.githubConnectedText}>
+                    GitHub: <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>@{user.github_username}</Text>
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.switchAccountBtn}
+                  onPress={() => {
+                    setGithubError('');
+                    setGithubModalVisible(true);
+                  }}
+                >
+                  <Text style={styles.switchAccountBtnText}>Update Token</Text>
+                </Pressable>
+              </View>
+            )}
 
             {/* ── Active AI Engine Banner ── */}
             {hasActiveEngine && activePreset ? (
@@ -832,6 +913,97 @@ export default function ProfileScreen() {
                   <>
                     <Feather name="trash-2" size={14} color="#FFFFFF" />
                     <Text style={styles.modalDeleteText}>Delete Key</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* GitHub Account / PAT Connection Modal */}
+      <Modal
+        visible={githubModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!connectingGithub) setGithubModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            if (!connectingGithub) setGithubModalVisible(false);
+          }}
+        >
+          <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(208, 253, 62, 0.12)' }]}>
+              <Feather name="github" size={24} color={COLORS.primary} />
+            </View>
+            <Text style={styles.modalTitle}>Connect GitHub Account</Text>
+            <Text style={styles.modalDesc}>
+              Enter a GitHub Personal Access Token (classic or fine-grained) with <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>repo</Text> scope to sync your pull requests, review changes, and let autonomous AI agents commit fixes directly to your repository.
+            </Text>
+
+            <Pressable
+              style={{ alignSelf: 'flex-start', marginVertical: 4 }}
+              onPress={() => {
+                const url = 'https://github.com/settings/tokens/new?scopes=repo,read:user,user:email&description=MergeDeck';
+                if (Platform.OS === 'web') {
+                  window.open(url, '_blank');
+                } else {
+                  WebBrowser.openBrowserAsync(url);
+                }
+              }}
+            >
+              <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' }}>
+                Create token on GitHub (repo scope) ↗
+              </Text>
+            </Pressable>
+
+            <View style={{ width: '100%', marginVertical: 10 }}>
+              <TextInput
+                style={[styles.keyInput, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}
+                value={githubTokenInput}
+                onChangeText={(t) => {
+                  setGithubTokenInput(t);
+                  if (githubError) setGithubError('');
+                }}
+                placeholder="ghp_... or github_pat_..."
+                placeholderTextColor={COLORS.textTertiary}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {githubError ? (
+              <View style={[styles.modalActionRow, { backgroundColor: 'rgba(239, 68, 68, 0.12)', padding: 8, borderRadius: 8, marginBottom: 12, width: '100%', justifyContent: 'flex-start' }]}>
+                <Feather name="alert-circle" size={14} color={COLORS.error} />
+                <Text style={{ color: COLORS.error, fontSize: 12, flex: 1 }}>{githubError}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalActionRow}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setGithubModalVisible(false)}
+                disabled={connectingGithub}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalDeleteBtn, { backgroundColor: COLORS.primary }, connectingGithub && { opacity: 0.7 }]}
+                onPress={handleConnectGitHubPAT}
+                disabled={connectingGithub}
+              >
+                {connectingGithub ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <>
+                    <Feather name="check" size={14} color="#000000" />
+                    <Text style={[styles.modalDeleteText, { color: '#000000' }]}>Connect & Sync</Text>
                   </>
                 )}
               </Pressable>
@@ -1662,5 +1834,101 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  demoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  demoBadgeText: {
+    color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  demoAlertCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  demoAlertTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  demoAlertIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  demoAlertTitle: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  demoAlertText: {
+    color: COLORS.textSecondary,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  connectGithubCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 9,
+    paddingHorizontal: SPACING.md,
+    marginTop: 2,
+  },
+  connectGithubCardBtnText: {
+    color: '#000000',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  githubConnectedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  githubConnectedText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  switchAccountBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(208, 253, 62, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(208, 253, 62, 0.25)',
+  },
+  switchAccountBtnText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

@@ -60,7 +60,7 @@ async def auth_session(request: Request, response: Response, db: AsyncIOMotorDat
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    is_https = request.url.scheme == "https"
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key="session_token", value=session_token,
         httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
@@ -97,7 +97,7 @@ async def demo_login(request: Request, response: Response, db: AsyncIOMotorDatab
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    is_https = request.url.scheme == "https"
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key="session_token", value=session_token,
         httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
@@ -111,45 +111,61 @@ async def demo_login(request: Request, response: Response, db: AsyncIOMotorDatab
 @router.post("/github/token")
 async def connect_github_token(
     request: Request,
+    response: Response,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    """Allow connecting a GitHub Personal Access Token (PAT) directly."""
+    """Allow connecting or signing in with a GitHub Personal Access Token (PAT) directly."""
     body = await request.json()
     token = (body.get("token") or body.get("access_token") or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token required")
 
-    user = await get_current_user(request, db)
-    user_id = user["user_id"] if user else "user_demo_local"
-
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
             "https://api.github.com/user",
             headers={"Authorization": f"Bearer {token}", "User-Agent": "MergeDeck"},
         )
         if resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="Invalid GitHub token")
+            raise HTTPException(status_code=400, detail="Invalid GitHub token: unable to verify identity on GitHub")
         gh_data = resp.json()
+
+    user = await get_current_user(request, db)
+    username = gh_data.get("login")
+    if user and user.get("user_id") and user.get("user_id") != "user_demo_local":
+        user_id = user["user_id"]
+    else:
+        existing_user = await db.users.find_one({"github_username": username}) if username else None
+        if existing_user:
+            user_id = existing_user["user_id"]
+        else:
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
 
     await db.users.update_one(
         {"user_id": user_id},
         {"$set": {
+            "user_id": user_id,
             "github_access_token": token,
-            "github_username": gh_data.get("login"),
-            "name": gh_data.get("name") or gh_data.get("login"),
-            "picture": gh_data.get("avatar_url"),
+            "github_username": username,
+            "name": gh_data.get("name") or username,
+            "picture": gh_data.get("avatar_url") or "",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
     )
-    from app.repositories import issue_repo
-    await issue_repo.invalidate_cache(db, f"prs_personal_{user_id}")
-    await issue_repo.invalidate_cache(db, "prs_org")
 
-    return {
-        "status": "connected",
-        "github_username": gh_data.get("login"),
-        "name": gh_data.get("name"),
-    }
+    session_token = await auth_service.create_session(db, user_id)
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.set_cookie(
+        key="session_token", value=session_token,
+        httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,
+    )
+
+    from app.repositories import issue_repo
+    await issue_repo.invalidate_all_pr_caches(db)
+
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0}) or {}
+    user_doc["session_token"] = session_token
+    return user_doc
 
 
 @router.get("/me")
@@ -173,7 +189,7 @@ def _get_effective_redirect_uri(request: Request) -> str:
     """Dynamically determine redirect_uri based on client request host and protocol."""
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
-    if host and ("13.211.92.23" in host or "sslip.io" in host):
+    if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
         return f"{proto}://{host}/auth-callback"
     if host and "localhost" in host:
         return f"{proto}://{host}/auth-callback"
@@ -236,7 +252,7 @@ async def github_callback(
     user_id = await auth_service.get_or_create_user(db, access_token, github_user)
     session_token = await auth_service.create_session(db, user_id)
 
-    is_https = request.url.scheme == "https"
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key="session_token", value=session_token,
         httponly=True, secure=is_https, samesite="none" if is_https else "lax", path="/", max_age=7 * 24 * 60 * 60,

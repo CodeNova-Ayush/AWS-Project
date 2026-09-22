@@ -40,9 +40,14 @@ export async function fetchIssue(issueId: string): Promise<CodeIssue> {
   return res.json();
 }
 
-export async function saveIssue(issueId: string): Promise<void> {
+export async function saveIssue(issueId: string, issueData?: Partial<CodeIssue>): Promise<void> {
   const headers = await getAuthHeaders();
-  await fetch(`${API_BASE}/api/issues/${issueId}/save`, { method: 'POST', headers, credentials: 'include' });
+  await fetch(`${API_BASE}/api/issues/${issueId}/save`, {
+    method: 'POST',
+    headers: { ...headers, ...(issueData ? { 'Content-Type': 'application/json' } : {}) },
+    credentials: 'include',
+    body: issueData ? JSON.stringify(issueData) : undefined,
+  });
 }
 
 export async function unsaveIssue(issueId: string): Promise<void> {
@@ -150,6 +155,26 @@ export async function logout(): Promise<void> {
   await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', headers, credentials: 'include' });
   await AsyncStorage.removeItem('session_token');
 }
+
+export async function connectGitHubToken(token: string): Promise<User> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/api/auth/github/token`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to connect token' }));
+    throw new Error(err.detail || 'Failed to connect GitHub token');
+  }
+  const user = await res.json();
+  if (user.session_token) {
+    await AsyncStorage.setItem('session_token', user.session_token);
+  }
+  return user;
+}
+
 
 // GitHub PR functions
 export async function fetchPersonalPRs(force = false): Promise<CodeIssue[]> {

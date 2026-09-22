@@ -356,4 +356,41 @@ class TestPRActions:
         assert len(filtered) == 1
         assert filtered[0]["issue_id"] == "gh_pr_ownerF_repoF_60"
 
+    def test_github_token_endpoint_validation(self, base_url, api_client):
+        """POST /api/auth/github/token without token or invalid token should return 400"""
+        resp_empty = api_client.post(f"{base_url}/api/auth/github/token", json={})
+        assert resp_empty.status_code == 400
+        assert "Token required" in resp_empty.text
+
+        resp_invalid = api_client.post(f"{base_url}/api/auth/github/token", json={"token": "invalid_fake_token_12345"})
+        assert resp_invalid.status_code == 400
+        assert "Invalid GitHub token" in resp_invalid.text
+
+    def test_save_pr_with_payload(self, base_url, auth_client):
+        """Verify saving a PR issue payload directly persists and appears in GET /api/saved-issues"""
+        pr_id = "gh_pr_testorg_testrepo_999"
+        pr_payload = {
+            "issue_id": pr_id,
+            "title": "Fix: AWS token sync race condition",
+            "description": "Fix token validation in reverse proxy",
+            "type": "bug",
+            "severity": "high",
+            "project": "testrepo",
+            "is_pr": True,
+        }
+        save_resp = auth_client.post(f"{base_url}/api/issues/{pr_id}/save", json=pr_payload)
+        assert save_resp.status_code == 200
+        assert save_resp.json()["saved"] is True
+
+        # Verify it is returned by /api/saved-issues
+        saved_resp = auth_client.get(f"{base_url}/api/saved-issues")
+        assert saved_resp.status_code == 200
+        saved_items = saved_resp.json()
+        saved_ids = [item["issue_id"] for item in saved_items]
+        assert pr_id in saved_ids
+
+        # Cleanup
+        auth_client.delete(f"{base_url}/api/issues/{pr_id}/save")
+
+
 
